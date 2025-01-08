@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formulário Responsivo</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div class="container mt-5">
+    <h1 class="text-center mb-4">Cadastro 2º Torneio Emuladores Grupo OldGen</h1>
+    <form id="simpleForm">
+      <div class="mb-3">
+        <label for="name" class="form-label">Nick/Nome</label>
+        <input type="text" class="form-control" id="name" placeholder="Digite seu nome" required>
+      </div>
+      <div class="mb-3">
+        <label for="email" class="form-label">Contato (Nº Whatsapp/Nick Discord) <span style="font-size: small;">* Onde for mais fácil te encontrar.</span></label>
+        <input type="text" class="form-control" id="email" placeholder="Digite seu contato" required>
+      </div>
+      <div class="mb-3">
+        <label for="pokemon-list" class="form-label">Selecione até 10 Pokémon</label>
+        <select class="form-select" id="pokemon-list" multiple required></select>
+      </div>
+      <button type="submit" class="btn btn-primary w-100">Enviar</button>
+    </form>
+    <p id="formMessage" class="mt-3 text-center"></p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="assets/js/script.js"></script>
+</body>
+</html>
