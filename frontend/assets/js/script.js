@@ -1,7 +1,6 @@
 $(document).ready(function () {
   // Lista de Pokémon
-  const pokemonArray  = [
-    // Generation 1
+  const primeiraGen = [// Generation 1
     'Bulbasaur', 'Ivysaur', 'Venusaur',
     'Charmander', 'Charmeleon', 'Charizard',
     'Squirtle', 'Wartortle', 'Blastoise',
@@ -73,9 +72,9 @@ $(document).ready(function () {
     'Kabuto', 'Kabutops',
     'Aerodactyl',
     'Snorlax',
-    'Dratini', 'Dragonair', 'Dragonite',
-
-    // Generation 2
+    'Dratini', 'Dragonair', 'Dragonite'
+  ];
+  const segundaGen = [// Generation 2
     'Chikorita', 'Bayleef', 'Meganium',
     'Cyndaquil', 'Quilava', 'Typhlosion',
     'Totodile', 'Croconaw', 'Feraligatr',
@@ -133,9 +132,9 @@ $(document).ready(function () {
     'Smoochum', 'Elekid', 'Magby',
     'Miltank',
     'Blissey',
-    'Larvitar', 'Pupitar', 'Tyranitar',
-
-    // Generation 3
+    'Larvitar', 'Pupitar', 'Tyranitar'
+  ];
+  const terceiraGen = [// Generation 3
     'Treecko', 'Grovyle', 'Sceptile',
     'Torchic', 'Combusken', 'Blaziken',
     'Mudkip', 'Marshtomp', 'Swampert',
@@ -197,9 +196,77 @@ $(document).ready(function () {
     'Relicanth',
     'Luvdisc',
     'Bagon', 'Shelgon', 'Salamence',
-    'Beldum', 'Metang', 'Metagross',
-    'Entei', 'Suicune', 'Raikou', 'Moltres', 'Zapdos', 'Articuno'
+    'Beldum', 'Metang', 'Metagross'
   ];
+  const quartaGen = [
+    'Turtwig', 'Grotle', 'Torterra',
+    'Chimchar', 'Monferno', 'Infernape',
+    'Piplup', 'Prinplup', 'Empoleon',
+    'Starly', 'Staravia', 'Staraptor',
+    'Bidoof', 'Bibarel',
+    'Kricketot', 'Kricketune',
+    'Shinx', 'Luxio', 'Luxray',
+    'Budew', 'Roserade',
+    'Cranidos', 'Rampardos',
+    'Shieldon', 'Bastiodon',
+    'Burmy', 'Wormadam', 'Mothim',
+    'Combee', 'Vespiquen',
+    'Pachirisu',
+    'Buizel', 'Floatzel',
+    'Cherubi', 'Cherrim',
+    'Shellos', 'Gastrodon',
+    'Ambipom',
+    'Drifloon', 'Drifblim',
+    'Buneary', 'Lopunny',
+    'Mismagius',
+    'Honchkrow',
+    'Glameow', 'Purugly',
+    'Chingling',
+    'Stunky', 'Skuntank',
+    'Bronzor', 'Bronzong',
+    'Bonsly',
+    'Mime Jr.',
+    'Happiny',
+    'Chatot',
+    'Spiritomb',
+    'Gible', 'Gabite', 'Garchomp',
+    'Munchlax',
+    'Riolu', 'Lucario',
+    'Hippopotas', 'Hippowdon',
+    'Skorupi', 'Drapion',
+    'Croagunk', 'Toxicroak',
+    'Carnivine',
+    'Finneon', 'Lumineon',
+    'Mantyke',
+    'Snover', 'Abomasnow',
+    'Weavile',
+    'Magnezone',
+    'Lickilicky',
+    'Rhyperior',
+    'Tangrowth',
+    'Electivire',
+    'Magmortar',
+    'Togekiss',
+    'Yanmega',
+    'Leafeon',
+    'Glaceon',
+    'Gliscor',
+    'Mamoswine',
+    'Porygon-Z',
+    'Gallade',
+    'Probopass',
+    'Dusknoir',
+    'Froslass',
+    'Rotom'
+  ];
+  const lendariosLiberados = [
+    'Moltres', 'Zapdos', 'Articuno',
+    'Entei', 'Suicune', 'Raikou',
+    'Regirock', 'Regice', 'Registeel',
+    'Uxie', 'Mesprit', 'Azelf'
+  ]
+
+  const pokemonArray  = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, lendariosLiberados);
 
   pokemonArray.forEach(pokemon => {
     $('#pokemon-list').append(new Option(pokemon, pokemon));
@@ -212,6 +279,25 @@ $(document).ready(function () {
 
   $('#pokemon-list').on('change', function () {
     const selectedOptions = $(this).val();
+    const lendariosSelecionados = selectedOptions.filter(pokemon =>
+        lendariosLiberados.includes(pokemon)
+    );
+
+    if (lendariosSelecionados.length > 2) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Limite de Lendários Excedido',
+        text: 'Você pode selecionar no máximo 2 Pokémon lendários.',
+      });
+
+      // Remove o último lendário selecionado
+      const removedOption = lendariosSelecionados.pop();
+      const novaSelecao = selectedOptions.filter(pokemon => pokemon !== removedOption);
+      $(this).val(novaSelecao).trigger('change');
+      return;
+    }
+
+
     if (selectedOptions.length > 10) {
       Swal.fire({
         icon: 'warning',
