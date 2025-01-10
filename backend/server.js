@@ -128,7 +128,7 @@ app.post('/updateConfig', (req, res) => {
   } = req.body;
 
   // Validar os dados recebidos
-  if (!titulo || !gen || !sprites || !qtdLimitado || !hook) {
+  if (!titulo || !gen || !sprites || !qtdLimitado) {
     return res.status(400).json({ error: 'Dados inválidos. Verifique os campos obrigatórios.' });
   }
 
@@ -151,7 +151,7 @@ app.post('/updateConfig', (req, res) => {
     gen,
     sprites,
     qtdLimitado,
-    hook,
+    hook ? hook : '',
     enviarDiscord ? 1 : 0,
     JSON.stringify(listaLimitado || []),
     JSON.stringify(listaBanido || []),
