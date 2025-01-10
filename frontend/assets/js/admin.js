@@ -1,9 +1,5 @@
 $(document).ready(function () {
 
-    if (localStorage.getItem('logado') !== 'true') {
-        window.location.href = 'login.html';
-    }
-
     const apiUrl = 'https://api.registro.old-gen.com';
     let primeiraGen, segundaGen, terceiraGen, quartaGen, allPokes = [];
     const lendariosBanidos = [];

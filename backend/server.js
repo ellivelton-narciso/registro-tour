@@ -214,6 +214,44 @@ app.post('/login', (req, res) => {
   });
 });
 
+app.get('/getTrainers', (req, res) => {
+  const query = 'SELECT * FROM trainers';
+
+  connection.getConnection((err, conn) => {
+    if (err) {
+      console.error('Erro ao obter conexão do pool:', err);
+      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    }
+
+    conn.query(query, (err, results) => {
+      conn.release();
+
+      if (err) {
+        console.error('Erro ao consultar dados no banco:', err);
+        return res.status(500).json({ error: 'Erro ao consultar dados no banco de dados.' });
+      }
+
+      const trainers = results.map(trainer => {
+        let pokemonList = [];
+        try {
+          pokemonList = JSON.parse(trainer.pokemon_list);
+        } catch (parseErr) {
+          console.error('Erro ao analisar lista de Pokémon:', parseErr);
+        }
+        return {
+          id: trainer.id,
+          name: trainer.name,
+          email: trainer.email,
+          pokemonList: pokemonList,
+        };
+      });
+
+      return res.status(200).json(trainers);
+    });
+  });
+});
+
+
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
