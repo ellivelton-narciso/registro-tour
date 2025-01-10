@@ -1,313 +1,124 @@
 $(document).ready(function () {
-  // Lista de Pokémon
-  const primeiraGen = [// Generation 1
-    'Bulbasaur', 'Ivysaur', 'Venusaur',
-    'Charmander', 'Charmeleon', 'Charizard',
-    'Squirtle', 'Wartortle', 'Blastoise',
-    'Caterpie', 'Metapod', 'Butterfree',
-    'Weedle', 'Kakuna', 'Beedrill',
-    'Pidgey', 'Pidgeotto', 'Pidgeot',
-    'Rattata', 'Raticate',
-    'Spearow', 'Fearow',
-    'Ekans', 'Arbok',
-    'Sandshrew', 'Sandslash',
-    'Nidoran♀', 'Nidorina', 'Nidoqueen',
-    'Nidoran♂', 'Nidorino', 'Nidoking',
-    'Clefairy', 'Clefable',
-    'Vulpix', 'Ninetales',
-    'Jigglypuff', 'Wigglytuff',
-    'Zubat', 'Golbat',
-    'Oddish', 'Gloom', 'Vileplume',
-    'Paras', 'Parasect',
-    'Venonat', 'Venomoth',
-    'Diglett', 'Dugtrio',
-    'Meowth', 'Persian',
-    'Psyduck', 'Golduck',
-    'Mankey', 'Primeape',
-    'Growlithe', 'Arcanine',
-    'Poliwag', 'Poliwhirl', 'Poliwrath',
-    'Abra', 'Kadabra', 'Alakazam',
-    'Machop', 'Machoke', 'Machamp',
-    'Bellsprout', 'Weepinbell', 'Victreebel',
-    'Tentacool', 'Tentacruel',
-    'Geodude', 'Graveler', 'Golem',
-    'Ponyta', 'Rapidash',
-    'Slowpoke', 'Slowbro',
-    'Magnemite', 'Magneton',
-    'Farfetch’d',
-    'Doduo', 'Dodrio',
-    'Seel', 'Dewgong',
-    'Grimer', 'Muk',
-    'Shellder', 'Cloyster',
-    'Gastly', 'Haunter', 'Gengar',
-    'Onix',
-    'Drowzee', 'Hypno',
-    'Krabby', 'Kingler',
-    'Voltorb', 'Electrode',
-    'Exeggcute', 'Exeggutor',
-    'Cubone', 'Marowak',
-    'Hitmonlee', 'Hitmonchan',
-    'Lickitung',
-    'Koffing', 'Weezing',
-    'Rhyhorn', 'Rhydon',
-    'Chansey',
-    'Tangela',
-    'Kangaskhan',
-    'Horsea', 'Seadra',
-    'Goldeen', 'Seaking',
-    'Staryu', 'Starmie',
-    'Mr. Mime',
-    'Scyther',
-    'Jynx',
-    'Electabuzz',
-    'Magmar',
-    'Pinsir',
-    'Tauros',
-    'Magikarp', 'Gyarados',
-    'Lapras',
-    'Ditto',
-    'Eevee', 'Vaporeon', 'Jolteon', 'Flareon',
-    'Porygon',
-    'Omanyte', 'Omastar',
-    'Kabuto', 'Kabutops',
-    'Aerodactyl',
-    'Snorlax',
-    'Dratini', 'Dragonair', 'Dragonite'
-  ];
-  const segundaGen = [// Generation 2
-    'Chikorita', 'Bayleef', 'Meganium',
-    'Cyndaquil', 'Quilava', 'Typhlosion',
-    'Totodile', 'Croconaw', 'Feraligatr',
-    'Sentret', 'Furret',
-    'Hoothoot', 'Noctowl',
-    'Ledyba', 'Ledian',
-    'Spinarak', 'Ariados',
-    'Crobat',
-    'Chinchou', 'Lanturn',
-    'Pichu', 'Cleffa', 'Igglybuff',
-    'Togepi', 'Togetic',
-    'Natu', 'Xatu',
-    'Mareep', 'Flaaffy', 'Ampharos',
-    'Bellossom',
-    'Marill', 'Azumarill',
-    'Sudowoodo',
-    'Politoed',
-    'Hoppip', 'Skiploom', 'Jumpluff',
-    'Aipom',
-    'Sunkern', 'Sunflora',
-    'Yanma',
-    'Wooper', 'Quagsire',
-    'Espeon', 'Umbreon',
-    'Murkrow',
-    'Slowking',
-    'Misdreavus',
-    'Unown',
-    'Wobbuffet',
-    'Girafarig',
-    'Pineco', 'Forretress',
-    'Dunsparce',
-    'Gligar',
-    'Steelix',
-    'Snubbull', 'Granbull',
-    'Qwilfish',
-    'Scizor',
-    'Shuckle',
-    'Heracross',
-    'Sneasel',
-    'Teddiursa', 'Ursaring',
-    'Slugma', 'Magcargo',
-    'Swinub', 'Piloswine',
-    'Corsola',
-    'Remoraid', 'Octillery',
-    'Delibird',
-    'Mantine',
-    'Skarmory',
-    'Houndour', 'Houndoom',
-    'Kingdra',
-    'Phanpy', 'Donphan',
-    'Porygon2',
-    'Stantler',
-    'Smeargle',
-    'Tyrogue', 'Hitmontop',
-    'Smoochum', 'Elekid', 'Magby',
-    'Miltank',
-    'Blissey',
-    'Larvitar', 'Pupitar', 'Tyranitar'
-  ];
-  const terceiraGen = [// Generation 3
-    'Treecko', 'Grovyle', 'Sceptile',
-    'Torchic', 'Combusken', 'Blaziken',
-    'Mudkip', 'Marshtomp', 'Swampert',
-    'Poochyena', 'Mightyena',
-    'Zigzagoon', 'Linoone',
-    'Wurmple', 'Silcoon', 'Beautifly',
-    'Cascoon', 'Dustox',
-    'Lotad', 'Lombre', 'Ludicolo',
-    'Seedot', 'Nuzleaf', 'Shiftry',
-    'Taillow', 'Swellow',
-    'Wingull', 'Pelipper',
-    'Ralts', 'Kirlia', 'Gardevoir',
-    'Surskit', 'Masquerain',
-    'Shroomish', 'Breloom',
-    'Slakoth', 'Vigoroth', 'Slaking',
-    'Nincada', 'Ninjask', 'Shedinja',
-    'Whismur', 'Loudred', 'Exploud',
-    'Makuhita', 'Hariyama',
-    'Azurill',
-    'Nosepass',
-    'Skitty', 'Delcatty',
-    'Sableye',
-    'Mawile',
-    'Aron', 'Lairon', 'Aggron',
-    'Meditite', 'Medicham',
-    'Electrike', 'Manectric',
-    'Plusle', 'Minun',
-    'Volbeat', 'Illumise',
-    'Roselia',
-    'Gulpin', 'Swalot',
-    'Carvanha', 'Sharpedo',
-    'Wailmer', 'Wailord',
-    'Numel', 'Camerupt',
-    'Torkoal',
-    'Spoink', 'Grumpig',
-    'Spinda',
-    'Trapinch', 'Vibrava', 'Flygon',
-    'Cacnea', 'Cacturne',
-    'Swablu', 'Altaria',
-    'Zangoose', 'Seviper',
-    'Lunatone', 'Solrock',
-    'Barboach', 'Whiscash',
-    'Corphish', 'Crawdaunt',
-    'Baltoy', 'Claydol',
-    'Lileep', 'Cradily',
-    'Anorith', 'Armaldo',
-    'Feebas', 'Milotic',
-    'Castform',
-    'Kecleon',
-    'Shuppet', 'Banette',
-    'Duskull', 'Dusclops',
-    'Tropius',
-    'Chimecho',
-    'Absol',
-    'Wynaut',
-    'Snorunt', 'Glalie',
-    'Spheal', 'Sealeo', 'Walrein',
-    'Clamperl', 'Huntail', 'Gorebyss',
-    'Relicanth',
-    'Luvdisc',
-    'Bagon', 'Shelgon', 'Salamence',
-    'Beldum', 'Metang', 'Metagross'
-  ];
-  const quartaGen = [
-    'Turtwig', 'Grotle', 'Torterra',
-    'Chimchar', 'Monferno', 'Infernape',
-    'Piplup', 'Prinplup', 'Empoleon',
-    'Starly', 'Staravia', 'Staraptor',
-    'Bidoof', 'Bibarel',
-    'Kricketot', 'Kricketune',
-    'Shinx', 'Luxio', 'Luxray',
-    'Budew', 'Roserade',
-    'Cranidos', 'Rampardos',
-    'Shieldon', 'Bastiodon',
-    'Burmy', 'Wormadam', 'Mothim',
-    'Combee', 'Vespiquen',
-    'Pachirisu',
-    'Buizel', 'Floatzel',
-    'Cherubi', 'Cherrim',
-    'Shellos', 'Gastrodon',
-    'Ambipom',
-    'Drifloon', 'Drifblim',
-    'Buneary', 'Lopunny',
-    'Mismagius',
-    'Honchkrow',
-    'Glameow', 'Purugly',
-    'Chingling',
-    'Stunky', 'Skuntank',
-    'Bronzor', 'Bronzong',
-    'Bonsly',
-    'Mime Jr.',
-    'Happiny',
-    'Chatot',
-    'Spiritomb',
-    'Gible', 'Gabite', 'Garchomp',
-    'Munchlax',
-    'Riolu', 'Lucario',
-    'Hippopotas', 'Hippowdon',
-    'Skorupi', 'Drapion',
-    'Croagunk', 'Toxicroak',
-    'Carnivine',
-    'Finneon', 'Lumineon',
-    'Mantyke',
-    'Snover', 'Abomasnow',
-    'Weavile',
-    'Magnezone',
-    'Lickilicky',
-    'Rhyperior',
-    'Tangrowth',
-    'Electivire',
-    'Magmortar',
-    'Togekiss',
-    'Yanmega',
-    'Leafeon',
-    'Glaceon',
-    'Gliscor',
-    'Mamoswine',
-    'Porygon-Z',
-    'Gallade',
-    'Probopass',
-    'Dusknoir',
-    'Froslass',
-    'Rotom'
-  ];
-  const lendariosLiberados = [
-    'Moltres', 'Zapdos', 'Articuno',
-    'Entei', 'Suicune', 'Raikou',
-    'Regirock', 'Regice', 'Registeel',
-    'Uxie', 'Mesprit', 'Azelf'
-  ]
+  let sprites;
+  let allPokes = [];
+  let pokemonArray = [];
 
-  const pokemonArray  = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, lendariosLiberados);
+  const urlBE = 'https://api.registro.old-gen.com';
+  fetch(`${urlBE}/getConfig`)
+      .then(response => response.json())
+      .then(async config => {
+        if (config.error) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Erro ao carregar configurações',
+            text: config.error,
+          });
+          return;
+        }
 
-  pokemonArray.forEach(pokemon => {
-    $('#pokemon-list').append(new Option(pokemon, pokemon));
-  });
+        if (config.encerrado === 1) {
+          window.location.href = 'encerradas.html';
+        }
 
-  $('#pokemon-list').select2({
-    placeholder: 'Escolha seus Pokémon',
-    allowClear: true,
-  });
+        const lendariosLiberados = config.listaLimitado || [];
+        const lendariosBanidos = config.listaBanido || [];
+        const gen = config.gen || 3;
+        const qtdLimitado = config.qtdLimitado || 2;
+        const qtdEscolha = config.qtdEscolha || 10;
+        sprites = config.sprites || 'emerald';
 
-  $('#pokemon-list').on('change', function () {
-    const selectedOptions = $(this).val();
-    const lendariosSelecionados = selectedOptions.filter(pokemon =>
-        lendariosLiberados.includes(pokemon)
-    );
+        $('title').text(config.titulo);
+        $('#title2').text(config.titulo2);
+        $('#labelSelect').text(`Selecione até ${qtdEscolha} Pokémon`);
 
-    if (lendariosSelecionados.length > 2) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Limite de Lendários Excedido',
-        text: 'Você pode selecionar no máximo 2 Pokémon lendários.',
+        let primeiraGen, segundaGen, terceiraGen, quartaGen;
+
+        async function carregarGens() {
+          try {
+            const [gen1, gen2, gen3, gen4] = await Promise.all([
+              fetch('assets/json/primeiraGen.json').then(response => response.json()),
+              fetch('assets/json/segundaGen.json').then(response => response.json()),
+              fetch('assets/json/terceiraGen.json').then(response => response.json()),
+              fetch('assets/json/quartaGen.json').then(response => response.json()),
+            ]);
+
+            primeiraGen = gen1;
+            segundaGen = gen2;
+            terceiraGen = gen3;
+            quartaGen = gen4;
+
+            if (gen === 1) {
+              allPokes = primeiraGen;
+            } else if (gen === 2) {
+              allPokes = primeiraGen.concat(segundaGen);
+            } else if (gen === 3) {
+              allPokes = primeiraGen.concat(segundaGen, terceiraGen);
+            } else if (gen === 4) {
+              allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen);
+            } else {
+              Swal.fire({
+                icon: 'warning',
+                title: 'Geração Inválida',
+                text: 'A geração especificada não é válida. Usando todos os Pokémon por padrão.',
+              });
+              allPokes = primeiraGen.concat(segundaGen, terceiraGen);
+            }
+
+            pokemonArray = allPokes.filter(pokemon => !lendariosBanidos.includes(pokemon));
+
+            pokemonArray.forEach(pokemon => {
+              $('#pokemon-list').append(new Option(pokemon, pokemon));
+            });
+
+            $('#pokemon-list').select2({
+              placeholder: 'Escolha seus Pokémon',
+              allowClear: true,
+            });
+          } catch (error) {
+            console.error('Erro ao carregar os arquivos JSON:', error);
+          }
+        }
+
+        await carregarGens();
+
+        $('#pokemon-list').on('change', function () {
+          const selectedOptions = $(this).val();
+          const lendariosSelecionados = selectedOptions.filter(pokemon =>
+              lendariosLiberados.includes(pokemon)
+          );
+
+          if (lendariosSelecionados.length > qtdLimitado) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'Limite de Lendários Excedido',
+              text: `Você pode selecionar no máximo ${qtdLimitado} Pokémon lendários.`,
+            });
+
+            const removedOption = lendariosSelecionados.pop();
+            const novaSelecao = selectedOptions.filter(pokemon => pokemon !== removedOption);
+            $(this).val(novaSelecao).trigger('change');
+            return;
+          }
+
+          if (selectedOptions.length > qtdEscolha) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'Limite Excedido',
+              text: `Você pode selecionar no máximo ${qtdEscolha} Pokémon.`,
+            });
+            const removedOption = selectedOptions.pop();
+            $(this).val(selectedOptions).trigger('change');
+          }
+        });
+      })
+      .catch(error => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Erro ao carregar dados',
+          text: 'Não foi possível carregar as configurações do servidor.',
+        });
+        console.error('Erro ao buscar configurações:', error);
       });
-
-      // Remove o último lendário selecionado
-      const removedOption = lendariosSelecionados.pop();
-      const novaSelecao = selectedOptions.filter(pokemon => pokemon !== removedOption);
-      $(this).val(novaSelecao).trigger('change');
-      return;
-    }
-
-
-    if (selectedOptions.length > 10) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Limite Excedido',
-        text: 'Você pode selecionar no máximo 10 Pokémon.',
-      });
-      const removedOption = selectedOptions.pop();
-      $(this).val(selectedOptions).trigger('change');
-    }
-  });
 
   $('#simpleForm').on('submit', function (event) {
     event.preventDefault();
@@ -339,14 +150,16 @@ $(document).ready(function () {
       icon: 'info',
       title: 'Confirmar Escolha',
       html: pokemonList
-          .map(
-              pokemon => `
-        <div style="margin-bottom: 10px;">
-          <p><strong>${pokemon}</strong></p>
-          <img src="../images/${pokemon.toLowerCase()}.gif" alt="${pokemon}" style="width:100px; height:auto;">
-        </div>
-      `
-          )
+          .map(pokemon => {
+            const pokemonIndex = allPokes.indexOf(pokemon) + 1;
+            const spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/${sprites}/${pokemonIndex}.png`;
+            return `
+            <div style="margin-bottom: 10px;">
+              <p><strong>${pokemon}</strong></p>
+              <img src="${spriteUrl}" alt="${pokemon}" style="width:100px; height:auto;">
+            </div>
+          `;
+          })
           .join(''),
       showCancelButton: true,
       confirmButtonText: 'Confirmar',
@@ -354,7 +167,7 @@ $(document).ready(function () {
     }).then(result => {
       if (result.isConfirmed) {
         // Enviar dados após confirmação
-        fetch('https://localhost:3000/submit', {
+        fetch(`${urlBE}/submit`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

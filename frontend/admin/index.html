@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Painel de Administração</h1>
+    <form id="admin-config-form">
+        <div class="mb-3">
+            <label for="titulo" class="form-label">Título</label>
+            <input type="text" id="titulo" name="titulo" class="form-control" placeholder="Título da aba">
+        </div>
+
+        <div class="mb-3">
+            <label for="titulo2" class="form-label">Subtítulo</label>
+            <input type="text" id="titulo2" name="titulo2" class="form-control" placeholder="Subtítulo exibido na página">
+        </div>
+
+        <div class="mb-3">
+            <label for="generation" class="form-label">Geração Ativa</label>
+            <select id="generation" name="generation" class="form-select">
+                <option value="1">Primeira Geração</option>
+                <option value="2">Segunda Geração</option>
+                <option value="3">Terceira Geração</option>
+                <option value="4">Quarta Geração</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="game-sprites" class="form-label">Jogo Sprites</label>
+            <select id="game-sprites" name="generation" class="form-select">
+                <option value="red-green">Red/Green</option>
+                <option value="red-blue">Red/Blue</option>
+                <option value="yellow">Yellow</option>
+                <option value="gold">Gold</option>
+                <option value="silver">Silver</option>
+                <option value="crystal">Crystal</option>
+                <option value="ruby-sapphire">Ruby/Sapphire</option>
+                <option value="firered-leafgreen">FireRed/LeafGreen</option>
+                <option value="emerald">Emerald</option>
+                <option value="diamond-pearl">Diamond/Pearl</option>
+                <option value="platinum">Platinum</option>
+                <option value="heartgold-soulsilver">HeartGold/SoulSilver</option>
+                <option value="black-white">Black/White</option>
+                <option value="x-y">X/Y</option>
+                <option value="omegaruby-alphasapphire">Omega Ruby/Alpha Sapphire</option>
+                <option value="sun-moon">Sun/Moon</option>
+                <option value="ultra-sun-ultra-moon">Ultra Sun/Ultra Moon</option>
+            </select>
+        </div>
+
+
+        <div class="mb-3">
+            <label for="legendary-limit" class="form-label">Limite de Pokémon Limitados</label>
+            <input type="number" id="legendary-limit" name="legendary-limit" class="form-control" min="0" max="6" value="2">
+        </div>
+
+        <div class="mb-3">
+            <label for="limitados-list" class="form-label">Pokémon Limitados</label>
+            <select class="form-select" id="limitados-list" multiple required></select>
+        </div>
+
+        <div class="mb-3">
+            <label for="ban-list" class="form-label">Pokémon Banidos</label>
+            <select class="form-select" id="ban-list" multiple required></select>
+        </div>
+
+        <div class="mb-3">
+            <label for="webhook" class="form-label">Webhook Discord</label>
+            <input type="url" id="webhook" name="webhook" class="form-control" placeholder="URL do webhook do Discord">
+        </div>
+
+        <div class="form-check mb-3">
+            <input type="checkbox" id="notifications-enabled" name="notifications-enabled" class="form-check-input">
+            <label for="notifications-enabled" class="form-check-label">Ativar Notificações Discord</label>
+        </div>
+
+
+
+        <button type="submit" class="btn btn-primary w-100">Salvar Configurações</button>
+    </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="../assets/js/admin.js"></script>
+</body>
+</html>
