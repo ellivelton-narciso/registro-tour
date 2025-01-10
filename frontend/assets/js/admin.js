@@ -1,4 +1,9 @@
 $(document).ready(function () {
+
+    if (localStorage.getItem('logado') !== 'true') {
+        window.location.href = 'login.html';
+    }
+
     const apiUrl = 'https://api.registro.old-gen.com';
     let primeiraGen, segundaGen, terceiraGen, quartaGen, allPokes = [];
     const lendariosBanidos = [];
@@ -75,7 +80,7 @@ $(document).ready(function () {
                 $('#legendary-limit').val(data.qtdLimitado || 2);
                 $('#webhook').val(data.hook || '');
                 $('#notifications-enabled').prop('checked', data.enviarDiscord === 1);
-                $('#panel-enabled').prop('checked', data.encerrado === 1);
+                $('#panel-enabled').prop('checked', data.encerrado === 0);
 
                 const gen = parseInt(data.gen || 1);
                 await carregarGens(gen);
@@ -100,6 +105,51 @@ $(document).ready(function () {
         carregarGens(selectedGen);
     });
 
-    // Carregar configurações ao iniciar
+    $('#submitConfig').on('click', function () {
+        event.preventDefault();
+        const titulo = $('#titulo').val();
+        const titulo2 = $('#titulo2').val();
+        const gen = $('#generation').val();
+        const sprites = $('#game-sprites').val();
+        const qtdLimitado = $('#legendary-limit').val();
+        const hook = $('#webhook').val();
+        const enviarDiscord = $('#notifications-enabled').prop('checked') ? 1 : 0;
+        const encerrado = $('#panel-enabled').prop('checked') ? 0 : 1;
+        const listaLimitado = $('#limitados-list').val();
+        const listaBanido = $('#ban-list').val();
+
+        $.ajax({
+            url: `${apiUrl}/updateConfig`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                titulo,
+                titulo2,
+                gen,
+                sprites,
+                qtdLimitado,
+                hook,
+                enviarDiscord,
+                encerrado,
+                listaLimitado,
+                listaBanido
+            }),
+            success: function () {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Configuração Atualizada',
+                    text: 'As configurações foram atualizadas com sucesso.',
+                });
+            },
+            error: function () {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: 'Não foi possível atualizar as configurações. Tente novamente mais tarde.',
+                });
+            }
+        });
+    });
+
     loadConfig();
 });

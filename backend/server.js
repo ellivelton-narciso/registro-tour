@@ -128,7 +128,7 @@ app.post('/updateConfig', (req, res) => {
   } = req.body;
 
   // Validar os dados recebidos
-  if (!titulo || !gen || !sprites || !qtdLimitado || !hook || !encerrado) {
+  if (!titulo || !gen || !sprites || !qtdLimitado || !hook) {
     return res.status(400).json({ error: 'Dados inválidos. Verifique os campos obrigatórios.' });
   }
 
@@ -153,9 +153,9 @@ app.post('/updateConfig', (req, res) => {
     qtdLimitado,
     hook,
     enviarDiscord ? 1 : 0,
-    encerrado ? 1 : 0,
     JSON.stringify(listaLimitado || []),
-    JSON.stringify(listaBanido || [])
+    JSON.stringify(listaBanido || []),
+    encerrado ? 1 : 0
   ];
 
   connection.getConnection((err, conn) => {
@@ -176,6 +176,44 @@ app.post('/updateConfig', (req, res) => {
     });
   });
 });
+
+app.post('/login', (req, res) => {
+  const { user, password } = req.body;
+
+  if (!user || !password) {
+    return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+  }
+
+  const query = 'SELECT * FROM usuarios WHERE user = ? LIMIT 1';
+  connection.getConnection((err, conn) => {
+    if (err) {
+      console.error('Erro ao obter conexão do pool:', err);
+      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    }
+
+    conn.query(query, [user], (err, results) => {
+      conn.release();
+
+      if (err) {
+        console.error('Erro ao consultar usuário no banco:', err);
+        return res.status(500).json({ error: 'Erro ao consultar usuário no banco de dados.' });
+      }
+
+      if (results.length === 0) {
+        return res.status(401).json({ error: 'Usuário incorreto.' });
+      }
+
+      const storedPassword = results[0].password;
+
+      if (password === storedPassword) {
+        return res.status(200).json({ success: true });
+      } else {
+        return res.status(401).json({ error: 'Senha incorreta.' });
+      }
+    });
+  });
+});
+
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
