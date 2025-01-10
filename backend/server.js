@@ -123,11 +123,12 @@ app.post('/updateConfig', (req, res) => {
     hook,
     enviarDiscord,
     listaLimitado,
-    listaBanido
+    listaBanido,
+    encerrado
   } = req.body;
 
   // Validar os dados recebidos
-  if (!titulo || !gen || !sprites || !qtdLimitado || !hook) {
+  if (!titulo || !gen || !sprites || !qtdLimitado || !hook || !encerrado) {
     return res.status(400).json({ error: 'Dados inválidos. Verifique os campos obrigatórios.' });
   }
 
@@ -140,7 +141,8 @@ app.post('/updateConfig', (req, res) => {
     hook = ?, 
     enviarDiscord = ?, 
     listaLimitado = ?, 
-    listaBanido = ?
+    listaBanido = ?,
+    encerrado = ?
     WHERE id = 1`;
 
   const values = [
@@ -151,6 +153,7 @@ app.post('/updateConfig', (req, res) => {
     qtdLimitado,
     hook,
     enviarDiscord ? 1 : 0,
+    encerrado ? 1 : 0,
     JSON.stringify(listaLimitado || []),
     JSON.stringify(listaBanido || [])
   ];

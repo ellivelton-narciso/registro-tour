@@ -75,6 +75,7 @@ $(document).ready(function () {
                 $('#legendary-limit').val(data.qtdLimitado || 2);
                 $('#webhook').val(data.hook || '');
                 $('#notifications-enabled').prop('checked', data.enviarDiscord === 1);
+                $('#panel-enabled').prop('checked', data.encerrado === 1);
 
                 const gen = parseInt(data.gen || 1);
                 await carregarGens(gen);
