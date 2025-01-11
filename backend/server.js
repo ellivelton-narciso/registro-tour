@@ -12,14 +12,13 @@ app.use(bodyParser.json());
 app.post('/submit', (req, res) => {
   const { name, email, pokemonList } = req.body;
 
-  if (!name || !email || !pokemonList || pokemonList.length !== 10) {
+  if (!name || !email || !pokemonList) {
     return res.status(400).json({
-      error: 'Dados inválidos. Certifique-se de preencher todos os campos e selecionar exatamente 10 Pokémon.',
+      error: 'Dados inválidos. Certifique-se de preencher todos os campos.',
     });
   }
 
-  const query = 'INSERT INTO trainers (name, email, pokemon_list) VALUES (?, ?, ?)';
-  const values = [name, email, JSON.stringify(pokemonList)];
+  const configQuery = 'SELECT qtdEscolha, enviarDiscord, hook FROM config LIMIT 1';
 
   connection.getConnection((err, conn) => {
     if (err) {
@@ -27,50 +26,66 @@ app.post('/submit', (req, res) => {
       return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
     }
 
-    conn.query(query, values, async (err, results) => {
-      conn.release();
-
+    conn.query(configQuery, (err, configResults) => {
       if (err) {
-        if (err.code === 'ER_DUP_ENTRY') {
-          if (err.message.includes('name')) {
-            return res.status(400).json({
-              error: 'O nome de usuário já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-            });
-          } else if (err.message.includes('email')) {
-            return res.status(400).json({
-              error: 'O contato já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-            });
-          }
-        }
-        console.error('Erro ao salvar dados no banco:', err);
-        return res.status(500).json({ error: 'Erro ao salvar dados no banco de dados.' });
+        conn.release();
+        console.error('Erro ao buscar configuração no banco:', err);
+        return res.status(500).json({ error: 'Erro ao buscar configuração do banco.' });
       }
 
-      const configQuery = 'SELECT enviarDiscord, hook FROM config LIMIT 1';
+      if (configResults.length === 0) {
+        conn.release();
+        return res.status(500).json({ error: 'Configuração não encontrada.' });
+      }
 
-      conn.query(configQuery, async (err, configResults) => {
+      const { qtdEscolha, enviarDiscord, hook } = configResults[0];
+
+      if (pokemonList.length !== qtdEscolha) {
+        conn.release();
+        return res.status(400).json({
+          error: `Dados inválidos. Certifique-se de selecionar exatamente ${qtdEscolha} Pokémon.`,
+        });
+      }
+
+      const insertQuery = 'INSERT INTO trainers (name, email, pokemon_list) VALUES (?, ?, ?)';
+      const values = [name, email, JSON.stringify(pokemonList)];
+
+      conn.query(insertQuery, values, async (err, results) => {
         if (err) {
-          console.error('Erro ao buscar configuração no banco:', err);
-          return res.status(500).json({ error: 'Erro ao buscar configuração do banco.' });
+          conn.release();
+
+          if (err.code === 'ER_DUP_ENTRY') {
+            if (err.message.includes('name')) {
+              return res.status(400).json({
+                error: 'O nome de usuário já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
+              });
+            } else if (err.message.includes('email')) {
+              return res.status(400).json({
+                error: 'O contato já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
+              });
+            }
+          }
+          console.error('Erro ao salvar dados no banco:', err);
+          return res.status(500).json({ error: 'Erro ao salvar dados no banco de dados.' });
         }
 
-        if (configResults.length === 0 || !configResults[0].enviarDiscord || !configResults[0].hook) {
+        if (enviarDiscord && hook) {
+          const webhookUrl = hook;
+          const discordMessage = {
+            content: `🎉 **Novo Participante no Torneio!**\n🧑 Boa sorte ${name} !`,
+          };
+
+          try {
+            await axios.post(webhookUrl, discordMessage);
+            console.log(`Notificação enviada ao Discord para o participante: ${name}`);
+          } catch (discordErr) {
+            console.error('Erro ao enviar notificação ao Discord:', discordErr);
+          }
+        } else {
           console.log('Configuração de webhook não encontrada ou desabilitada.');
-          return res.status(200).json({ message: 'Dados enviados com sucesso, sem notificação de webhook.' });
         }
 
-        const webhookUrl = configResults[0].hook;
-        const discordMessage = {
-          content: `🎉 **Novo Participante no Torneio!**\n🧑 Boa sorte ${name} !`,
-        };
-
-        try {
-          await axios.post(webhookUrl, discordMessage);
-          console.log(`Notificação enviada ao Discord para o participante: ${name}`);
-        } catch (discordErr) {
-          console.error('Erro ao enviar notificação ao Discord:', discordErr);
-        }
-
+        conn.release();
         return res.status(200).json({ message: 'Dados enviados com sucesso!' });
       });
     });
