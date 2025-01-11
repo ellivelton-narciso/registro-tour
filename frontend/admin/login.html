@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <script src="../assets/js/config.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login Admin</title>
@@ -39,7 +40,7 @@
             const password = $('#password').val();
 
             $.ajax({
-                url: 'https://api.registro.old-gen.com/login',
+                url: `${localStorage.getItem('urlBE')}/login`,
                 type: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({ user: username, password: password }),

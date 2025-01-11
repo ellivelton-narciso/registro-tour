@@ -1,6 +1,6 @@
 $(document).ready(function () {
 
-    const apiUrl = 'https://api.registro.old-gen.com';
+    const apiUrl = localStorage.getItem('urlBE');
     let primeiraGen, segundaGen, terceiraGen, quartaGen, allPokes = [];
     const lendariosBanidos = [];
 
@@ -77,6 +77,7 @@ $(document).ready(function () {
                 $('#webhook').val(data.hook || '');
                 $('#notifications-enabled').prop('checked', data.enviarDiscord === 1);
                 $('#panel-enabled').prop('checked', data.encerrado === 0);
+                $('#escolha-limit').val(data.qtdEscolha || 10);
 
                 const gen = parseInt(data.gen || 1);
                 await carregarGens(gen);
@@ -113,6 +114,7 @@ $(document).ready(function () {
         const encerrado = $('#panel-enabled').prop('checked') ? 0 : 1;
         const listaLimitado = $('#limitados-list').val();
         const listaBanido = $('#ban-list').val();
+        const qtdEscolha = $('#escolha-limit').val();
 
         $.ajax({
             url: `${apiUrl}/updateConfig`,
@@ -128,7 +130,8 @@ $(document).ready(function () {
                 enviarDiscord,
                 encerrado,
                 listaLimitado,
-                listaBanido
+                listaBanido,
+                qtdEscolha
             }),
             success: function () {
                 Swal.fire({

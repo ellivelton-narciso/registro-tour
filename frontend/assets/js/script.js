@@ -3,7 +3,7 @@ $(document).ready(function () {
   let allPokes = [];
   let pokemonArray = [];
 
-  const urlBE = 'https://api.registro.old-gen.com';
+  const urlBE = localStorage.getItem('urlBE');
   fetch(`${urlBE}/getConfig`)
       .then(response => response.json())
       .then(async config => {

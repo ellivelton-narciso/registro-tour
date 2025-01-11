@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="../assets/js/config.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inscrições Encerradas</title>
@@ -42,12 +43,11 @@
 </div>
 
 <script>
-  // Verificar a configuração para redirecionar
-  fetch('https://api.registro.old-gen.com/getConfig')
+  fetch(`${localStorage.getItem('urlBE')}/getConfig`)
           .then(response => response.json())
           .then(data => {
             if (data.encerrado === 0) {
-              window.location.href = 'index.html'; // Redireciona para o index.html
+              window.location.href = 'index.html';
             }
           })
           .catch(error => console.error('Erro ao verificar o status das inscrições:', error));

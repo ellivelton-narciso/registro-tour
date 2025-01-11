@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
     function getTrainers() {
-        fetch('https://api.registro.old-gen.com/getTrainers')
+        fetch(`${localStorage.getItem('urlBE')}/getTrainers`)
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
