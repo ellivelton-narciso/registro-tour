@@ -24,7 +24,6 @@ $(document).ready(function () {
             terceiraGen = gen3;
             quartaGen = gen4;
 
-            // Determinar os Pokémon disponíveis com base na geração ativa
             if (gen === 1) {
                 allPokes = primeiraGen;
             } else if (gen === 2) {

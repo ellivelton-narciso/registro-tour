@@ -2,8 +2,34 @@ $(document).ready(function () {
   let sprites;
   let allPokes = [];
   let pokemonArray = [];
-
   const urlBE = localStorage.getItem('urlBE');
+
+  function getPrize(codigo) {
+    return fetch(`${urlBE}/getPrizes?codigo=${codigo}`)
+        .then(response => response.json())
+        .then(data => {
+          return data.length ? data[0] : null; // Retorna o prêmio, caso encontrado
+        })
+        .catch(error => {
+          console.error('Erro ao buscar prêmio:', error);
+          return null;
+        });
+  }
+
+
+  function debounce(func, delay) {
+    let timer;
+    return function () {
+      const context = this;
+      const args = arguments;
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        func.apply(context, args);
+      }, delay);
+    };
+  }
+
+
   fetch(`${urlBE}/getConfig`)
       .then(response => response.json())
       .then(async config => {
@@ -20,11 +46,11 @@ $(document).ready(function () {
           window.location.href = 'encerradas.html';
         }
 
-        const lendariosLiberados = config.listaLimitado || [];
-        const lendariosBanidos = config.listaBanido || [];
-        const gen = config.gen || 3;
-        const qtdLimitado = config.qtdLimitado || 2;
-        const qtdEscolha = config.qtdEscolha || 10;
+        let lendariosLiberados = config.listaLimitado || [];
+        let lendariosBanidos = config.listaBanido || [];
+        let gen = config.gen || 3;
+        let qtdLimitado = config.qtdLimitado || 2;
+        let qtdEscolha = config.qtdEscolha || 10;
         sprites = config.sprites || 'emerald';
 
         $('title').text(config.titulo);
@@ -80,6 +106,34 @@ $(document).ready(function () {
         }
 
         await carregarGens();
+
+        function applyPrizePokemon(prize) {
+          const pokemonList = prize.pokemonList || [];
+
+          // Adiciona os Pokémon filtrados à lista de opções do select2
+          pokemonList.forEach(pokemon => {
+            // Verifica se o Pokémon já está na lista de opções
+            if ($('#pokemon-list').find(`option[value="${pokemon}"]`).length === 0) {
+              $('#pokemon-list').append(new Option(pokemon, pokemon));
+            }
+          });
+
+          // Atualiza o select2 com os novos Pokémon (não modificamos o pokemonArray aqui)
+          $('#pokemon-list').trigger('change');
+        }
+
+        $('#codigo').on('input', debounce(function () {
+          const codigo = $(this).val().trim();
+          if (codigo) {
+            getPrize(codigo).then(async prize => {
+              if (prize) {
+                console.log('Premio: ' + JSON.stringify(prize));
+                applyPrizePokemon(prize);
+              }
+            });
+          }
+        }, 500));
+
 
         $('#pokemon-list').on('change', function () {
           const selectedOptions = $(this).val();

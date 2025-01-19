@@ -10,7 +10,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 app.post('/submit', (req, res) => {
-  const { name, email, pokemonList } = req.body;
+  const { name, email, pokemonList, codigo } = req.body;
 
   if (!name || !email || !pokemonList) {
     return res.status(400).json({
@@ -47,47 +47,109 @@ app.post('/submit', (req, res) => {
         });
       }
 
-      const insertQuery = 'INSERT INTO trainers (name, email, pokemon_list) VALUES (?, ?, ?)';
-      const values = [name, email, JSON.stringify(pokemonList)];
+      let validCodigo = null;
+      if (codigo) {
+        const codigoQuery = 'SELECT COUNT(*) AS count FROM prizes WHERE codigo = ?';
+        conn.query(codigoQuery, [codigo], (err, countResults) => {
+          if (err) {
+            conn.release();
+            console.error('Erro ao verificar código na tabela prizes:', err);
+            return res.status(500).json({ error: 'Erro ao verificar código no banco.' });
+          }
 
-      conn.query(insertQuery, values, async (err, results) => {
-        if (err) {
-          conn.release();
+          if (countResults[0].count > 0) {
+            validCodigo = codigo;
+          } else {
+            validCodigo = null;
+          }
 
-          if (err.code === 'ER_DUP_ENTRY') {
-            if (err.message.includes('name')) {
-              return res.status(400).json({
-                error: 'O nome de usuário já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-              });
-            } else if (err.message.includes('email')) {
-              return res.status(400).json({
-                error: 'O contato já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-              });
+          const insertQuery = 'INSERT INTO trainers (name, email, pokemon_list, codigo) VALUES (?, ?, ?, ?)';
+          const values = [name, email, JSON.stringify(pokemonList), validCodigo];
+
+          conn.query(insertQuery, values, async (err, results) => {
+            if (err) {
+              conn.release();
+
+              if (err.code === 'ER_DUP_ENTRY') {
+                if (err.message.includes('name')) {
+                  return res.status(400).json({
+                    error: 'O nome de usuário já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
+                  });
+                } else if (err.message.includes('email')) {
+                  return res.status(400).json({
+                    error: 'O contato já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
+                  });
+                }
+              }
+              console.error('Erro ao salvar dados no banco:', err);
+              return res.status(500).json({ error: 'Erro ao salvar dados no banco de dados.' });
             }
+
+            if (enviarDiscord && hook) {
+              const webhookUrl = hook;
+              const discordMessage = {
+                content: `🎉 **Novo Participante no Torneio!**\n🧑 Boa sorte ${name} !`,
+              };
+
+              try {
+                await axios.post(webhookUrl, discordMessage);
+                console.log(`Notificação enviada ao Discord para o participante: ${name}`);
+              } catch (discordErr) {
+                console.error('Erro ao enviar notificação ao Discord:', discordErr);
+              }
+            } else {
+              console.log('Configuração de webhook não encontrada ou desabilitada.');
+            }
+
+            conn.release();
+            return res.status(200).json({ message: 'Dados enviados com sucesso!' });
+          });
+        });
+      } else {
+        validCodigo = null;
+
+        const insertQuery = 'INSERT INTO trainers (name, email, pokemon_list, codigo) VALUES (?, ?, ?, ?)';
+        const values = [name, email, JSON.stringify(pokemonList), validCodigo];
+
+        conn.query(insertQuery, values, async (err, results) => {
+          if (err) {
+            conn.release();
+
+            if (err.code === 'ER_DUP_ENTRY') {
+              if (err.message.includes('name')) {
+                return res.status(400).json({
+                  error: 'O nome de usuário já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
+                });
+              } else if (err.message.includes('email')) {
+                return res.status(400).json({
+                  error: 'O contato já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
+                });
+              }
+            }
+            console.error('Erro ao salvar dados no banco:', err);
+            return res.status(500).json({ error: 'Erro ao salvar dados no banco de dados.' });
           }
-          console.error('Erro ao salvar dados no banco:', err);
-          return res.status(500).json({ error: 'Erro ao salvar dados no banco de dados.' });
-        }
 
-        if (enviarDiscord && hook) {
-          const webhookUrl = hook;
-          const discordMessage = {
-            content: `🎉 **Novo Participante no Torneio!**\n🧑 Boa sorte ${name} !`,
-          };
+          if (enviarDiscord && hook) {
+            const webhookUrl = hook;
+            const discordMessage = {
+              content: `🎉 **Novo Participante no Torneio!**\n🧑 Boa sorte ${name} !`,
+            };
 
-          try {
-            await axios.post(webhookUrl, discordMessage);
-            console.log(`Notificação enviada ao Discord para o participante: ${name}`);
-          } catch (discordErr) {
-            console.error('Erro ao enviar notificação ao Discord:', discordErr);
+            try {
+              await axios.post(webhookUrl, discordMessage);
+              console.log(`Notificação enviada ao Discord para o participante: ${name}`);
+            } catch (discordErr) {
+              console.error('Erro ao enviar notificação ao Discord:', discordErr);
+            }
+          } else {
+            console.log('Configuração de webhook não encontrada ou desabilitada.');
           }
-        } else {
-          console.log('Configuração de webhook não encontrada ou desabilitada.');
-        }
 
-        conn.release();
-        return res.status(200).json({ message: 'Dados enviados com sucesso!' });
-      });
+          conn.release();
+          return res.status(200).json({ message: 'Dados enviados com sucesso!' });
+        });
+      }
     });
   });
 });
@@ -268,6 +330,108 @@ app.get('/getTrainers', (req, res) => {
     });
   });
 });
+
+app.post('/submitPrizes', (req, res) => {
+  const { id, nome, codigo, pokemonList } = req.body;
+
+  if (!nome || !codigo || !pokemonList) {
+    return res.status(400).json({ error: 'Dados inválidos. Certifique-se de preencher todos os campos obrigatórios.' });
+  }
+
+  const pokemonListStr = JSON.stringify(pokemonList);
+
+  connection.getConnection((err, conn) => {
+    if (err) {
+      console.error('Erro ao obter conexão do pool:', err);
+      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    }
+
+    if (id) {
+      const updateQuery = `
+        UPDATE prizes 
+        SET nome = ?, codigo = ?, pokemon_list = ? 
+        WHERE id = ?
+      `;
+      const values = [nome, codigo, pokemonListStr, id];
+
+      conn.query(updateQuery, values, (err, results) => {
+        conn.release();
+
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({
+              error: 'O nome ou código já existe em outro registro. Verifique os dados e tente novamente.',
+            });
+          }
+          console.error('Erro ao atualizar prêmio:', err);
+          return res.status(500).json({ error: 'Erro ao atualizar o prêmio no banco de dados.' });
+        }
+
+        if (results.affectedRows === 0) {
+          return res.status(404).json({ error: 'Prêmio com o ID fornecido não encontrado.' });
+        }
+
+        return res.status(200).json({ message: 'Prêmio atualizado com sucesso!' });
+      });
+    } else {
+      const insertQuery = `
+        INSERT INTO prizes (nome, codigo, pokemon_list) 
+        VALUES (?, ?, ?)
+      `;
+      const values = [nome, codigo, pokemonListStr];
+
+      conn.query(insertQuery, values, (err, results) => {
+        conn.release();
+
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({
+              error: 'O nome ou código já existe. Verifique os dados e tente novamente.',
+            });
+          }
+          console.error('Erro ao inserir prêmio:', err);
+          return res.status(500).json({ error: 'Erro ao inserir o prêmio no banco de dados.' });
+        }
+
+        return res.status(201).json({ message: 'Prêmio criado com sucesso!', id: results.insertId });
+      });
+    }
+  });
+});
+
+app.get('/getPrizes', (req, res) => {
+  const { codigo } = req.query; // Obter o parâmetro 'codigo' da requisição
+  const query = codigo
+      ? 'SELECT * FROM prizes WHERE codigo = ?'
+      : 'SELECT * FROM prizes';
+
+  connection.getConnection((err, conn) => {
+    if (err) {
+      console.error('Erro ao obter conexão do pool:', err);
+      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    }
+
+    conn.query(query, codigo ? [codigo] : [], (err, results) => {
+      conn.release();
+
+      if (err) {
+        console.error('Erro ao consultar prêmios no banco:', err);
+        return res.status(500).json({ error: 'Erro ao consultar prêmios no banco de dados.' });
+      }
+
+      const prizes = results.map(prize => ({
+        id: prize.id,
+        nome: prize.nome,
+        codigo: prize.codigo,
+        pokemonList: JSON.parse(prize.pokemon_list || '[]'),
+      }));
+
+      return res.status(200).json(prizes);
+    });
+  });
+});
+
+
 
 
 
