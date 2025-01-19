@@ -110,8 +110,10 @@ $(document).ready(function () {
         function applyPrizePokemon(prize) {
           const pokemonList = prize.pokemonList || [];
 
-          // Adiciona os Pokémon filtrados à lista de opções do select2
-          pokemonList.forEach(pokemon => {
+          const filteredPokemonList = pokemonList.filter(pokemon =>
+              allPokes.includes(pokemon)
+          );
+          filteredPokemonList.forEach(pokemon => {
             // Verifica se o Pokémon já está na lista de opções
             if ($('#pokemon-list').find(`option[value="${pokemon}"]`).length === 0) {
               $('#pokemon-list').append(new Option(pokemon, pokemon));
@@ -127,8 +129,8 @@ $(document).ready(function () {
           if (codigo) {
             getPrize(codigo).then(async prize => {
               if (prize) {
-                console.log('Premio: ' + JSON.stringify(prize));
                 applyPrizePokemon(prize);
+                $('#codigo').prop('disabled', true);
               }
             });
           }
