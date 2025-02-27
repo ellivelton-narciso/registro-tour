@@ -46,6 +46,12 @@ $(document).ready(function () {
           window.location.href = 'encerradas.html';
         }
 
+        if (config.prizes === 0) {
+          $('label[for="codigo"]').hide();
+          $('#codigo').hide();
+
+        }
+
         let lendariosLiberados = config.listaLimitado || [];
         let lendariosBanidos = config.listaBanido || [];
         let gen = config.gen || 3;
@@ -57,21 +63,23 @@ $(document).ready(function () {
         $('#title2').text(config.titulo2);
         $('#labelSelect').text(`Selecione até ${qtdEscolha} Pokémon`);
 
-        let primeiraGen, segundaGen, terceiraGen, quartaGen;
+        let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen;
 
         async function carregarGens() {
           try {
-            const [gen1, gen2, gen3, gen4] = await Promise.all([
+            const [gen1, gen2, gen3, gen4, gen5] = await Promise.all([
               fetch('assets/json/primeiraGen.json').then(response => response.json()),
               fetch('assets/json/segundaGen.json').then(response => response.json()),
               fetch('assets/json/terceiraGen.json').then(response => response.json()),
               fetch('assets/json/quartaGen.json').then(response => response.json()),
+              fetch('assets/json/quintaGen.json').then(response => response.json()),
             ]);
 
             primeiraGen = gen1;
             segundaGen = gen2;
             terceiraGen = gen3;
             quartaGen = gen4;
+            quintaGen = gen5
 
             if (gen === 1) {
               allPokes = primeiraGen;
@@ -81,13 +89,15 @@ $(document).ready(function () {
               allPokes = primeiraGen.concat(segundaGen, terceiraGen);
             } else if (gen === 4) {
               allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen);
+            } else if (gen === 5) {
+              allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             } else {
               Swal.fire({
                 icon: 'warning',
                 title: 'Geração Inválida',
                 text: 'A geração especificada não é válida. Usando todos os Pokémon por padrão.',
               });
-              allPokes = primeiraGen.concat(segundaGen, terceiraGen);
+              allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             }
 
             pokemonArray = allPokes.filter(pokemon => !lendariosBanidos.includes(pokemon));

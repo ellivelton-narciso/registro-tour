@@ -1,7 +1,7 @@
 $(document).ready(function () {
 
     const apiUrl = localStorage.getItem('urlBE');
-    let primeiraGen, segundaGen, terceiraGen, quartaGen, allPokes = [];
+    let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen, allPokes = [];
     const lendariosBanidos = [];
 
     $('#limitados-list, #ban-list').select2({
@@ -12,17 +12,19 @@ $(document).ready(function () {
     async function carregarGens(gen) {
         try {
             // Carregar todas as gerações simultaneamente
-            const [gen1, gen2, gen3, gen4] = await Promise.all([
+            const [gen1, gen2, gen3, gen4, gen5] = await Promise.all([
                 fetch('../assets/json/primeiraGen.json').then(response => response.json()),
                 fetch('../assets/json/segundaGen.json').then(response => response.json()),
                 fetch('../assets/json/terceiraGen.json').then(response => response.json()),
                 fetch('../assets/json/quartaGen.json').then(response => response.json()),
+                fetch('../assets/json/quintaGen.json').then(response => response.json()),
             ]);
 
             primeiraGen = gen1;
             segundaGen = gen2;
             terceiraGen = gen3;
             quartaGen = gen4;
+            quintaGen = gen5;
 
             if (gen === 1) {
                 allPokes = primeiraGen;
@@ -32,13 +34,15 @@ $(document).ready(function () {
                 allPokes = primeiraGen.concat(segundaGen, terceiraGen);
             } else if (gen === 4) {
                 allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen);
+            } else if (gen === 5) {
+                allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             } else {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Geração Inválida',
                     text: 'A geração especificada não é válida. Usando todos os Pokémon por padrão.',
                 });
-                allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen);
+                allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             }
 
             const pokemonArray = allPokes.filter(pokemon => !lendariosBanidos.includes(pokemon));
@@ -75,6 +79,7 @@ $(document).ready(function () {
                 $('#legendary-limit').val(data.qtdLimitado || 2);
                 $('#webhook').val(data.hook || '');
                 $('#notifications-enabled').prop('checked', data.enviarDiscord === 1);
+                $('#prizes-enabled').prop('checked', data.prizes === 1);
                 $('#panel-enabled').prop('checked', data.encerrado === 0);
                 $('#escolha-limit').val(data.qtdEscolha || 10);
 
@@ -110,6 +115,7 @@ $(document).ready(function () {
         const qtdLimitado = $('#legendary-limit').val();
         const hook = $('#webhook').val();
         const enviarDiscord = $('#notifications-enabled').prop('checked') ? 1 : 0;
+        const prizes = $('#prizes-enabled').prop('checked') ? 1 : 0;
         const encerrado = $('#panel-enabled').prop('checked') ? 0 : 1;
         const listaLimitado = $('#limitados-list').val();
         const listaBanido = $('#ban-list').val();
@@ -130,7 +136,8 @@ $(document).ready(function () {
                 encerrado,
                 listaLimitado,
                 listaBanido,
-                qtdEscolha
+                qtdEscolha,
+                prizes
             }),
             success: function () {
                 Swal.fire({
