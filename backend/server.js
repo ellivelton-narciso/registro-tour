@@ -202,7 +202,8 @@ app.post('/updateConfig', (req, res) => {
     enviarDiscord,
     listaLimitado,
     listaBanido,
-    encerrado
+    encerrado,
+    prizes
   } = req.body;
 
   // Validar os dados recebidos
@@ -221,7 +222,8 @@ app.post('/updateConfig', (req, res) => {
     enviarDiscord = ?, 
     listaLimitado = ?, 
     listaBanido = ?,
-    encerrado = ?
+    encerrado = ?,
+    prizes = ?
     WHERE id = 1`;
 
   const values = [
@@ -235,7 +237,8 @@ app.post('/updateConfig', (req, res) => {
     enviarDiscord ? 1 : 0,
     JSON.stringify(listaLimitado || []),
     JSON.stringify(listaBanido || []),
-    encerrado ? 1 : 0
+    encerrado ? 1 : 0,
+    prizes ? 1 : 0
   ];
 
   connection.getConnection((err, conn) => {

@@ -5,14 +5,15 @@ $(document).ready(async function () {
 
     async function carregarGens() {
         try {
-            const [gen1, gen2, gen3, gen4] = await Promise.all([
+            const [gen1, gen2, gen3, gen4, gen5] = await Promise.all([
                 fetch('../assets/json/primeiraGen.json').then(response => response.json()),
                 fetch('../assets/json/segundaGen.json').then(response => response.json()),
                 fetch('../assets/json/terceiraGen.json').then(response => response.json()),
                 fetch('../assets/json/quartaGen.json').then(response => response.json()),
+                fetch('../assets/json/quintaGen.json').then(response => response.json()),
             ]);
 
-            allPokes = [...gen1, ...gen2, ...gen3, ...gen4];
+            allPokes = [...gen1, ...gen2, ...gen3, ...gen4, ...gen5];
         } catch (error) {
             console.error('Erro ao carregar os arquivos JSON:', error);
         }
