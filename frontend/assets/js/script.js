@@ -3,6 +3,8 @@ $(document).ready(function () {
   let allPokes = [];
   let pokemonArray = [];
   const urlBE = localStorage.getItem('urlBE');
+  let qtdEscolha;
+  let allPokemonData = [];
 
   function getPrize(codigo) {
     return fetch(`${urlBE}/getPrizes?codigo=${codigo}`)
@@ -16,7 +18,6 @@ $(document).ready(function () {
         });
   }
 
-
   function debounce(func, delay) {
     let timer;
     return function () {
@@ -28,7 +29,6 @@ $(document).ready(function () {
       }, delay);
     };
   }
-
 
   fetch(`${urlBE}/getConfig`)
       .then(response => response.json())
@@ -49,14 +49,13 @@ $(document).ready(function () {
         if (config.prizes === 0) {
           $('label[for="codigo"]').hide();
           $('#codigo').hide();
-
         }
 
         let lendariosLiberados = config.listaLimitado || [];
         let lendariosBanidos = config.listaBanido || [];
         let gen = config.gen || 3;
         let qtdLimitado = config.qtdLimitado || 2;
-        let qtdEscolha = config.qtdEscolha || 10;
+        qtdEscolha = config.qtdEscolha || 10;
         sprites = config.sprites || 'emerald';
 
         $('title').text(config.titulo);
@@ -79,40 +78,80 @@ $(document).ready(function () {
             segundaGen = gen2;
             terceiraGen = gen3;
             quartaGen = gen4;
-            quintaGen = gen5
+            quintaGen = gen5;
 
             if (gen === 1) {
-              allPokes = primeiraGen;
+              allPokemonData = primeiraGen;
             } else if (gen === 2) {
-              allPokes = primeiraGen.concat(segundaGen);
+              allPokemonData = primeiraGen.concat(segundaGen);
             } else if (gen === 3) {
-              allPokes = primeiraGen.concat(segundaGen, terceiraGen);
+              allPokemonData = primeiraGen.concat(segundaGen, terceiraGen);
             } else if (gen === 4) {
-              allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen);
+              allPokemonData = primeiraGen.concat(segundaGen, terceiraGen, quartaGen);
             } else if (gen === 5) {
-              allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
+              allPokemonData = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             } else {
               Swal.fire({
                 icon: 'warning',
                 title: 'Geração Inválida',
                 text: 'A geração especificada não é válida. Usando todos os Pokémon por padrão.',
               });
-              allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
+              allPokemonData = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             }
 
-            pokemonArray = allPokes.filter(pokemon => !lendariosBanidos.includes(pokemon));
+            processarPokemonData();
 
-            pokemonArray.forEach(pokemon => {
-              $('#pokemon-list').append(new Option(pokemon, pokemon));
-            });
-
-            $('#pokemon-list').select2({
-              placeholder: 'Escolha seus Pokémon',
-              allowClear: true,
-            });
           } catch (error) {
             console.error('Erro ao carregar os arquivos JSON:', error);
           }
+        }
+
+        function processarPokemonData() {
+          const pokemonPorId = {};
+
+          const pokemonNaoBanidos = allPokemonData.filter(pokemon =>
+              !lendariosBanidos.includes(pokemon.name)
+          );
+
+          pokemonNaoBanidos.forEach(pokemon => {
+            const id = pokemon.id;
+            if (!pokemonPorId[id]) {
+              pokemonPorId[id] = [];
+            }
+            pokemonPorId[id].push(pokemon.name);
+          });
+
+          // Transformar os grupos em arrays ou strings para o formato esperado
+          pokemonArray = [];
+          allPokes = [];
+
+          Object.values(pokemonPorId).forEach(grupo => {
+            if (grupo.length > 1) {
+              // Mais de uma forma, adicionar como array
+              pokemonArray.push(grupo);
+              allPokes.push(grupo);
+            } else {
+              // Apenas uma forma, adicionar como string
+              pokemonArray.push(grupo[0]);
+              allPokes.push(grupo[0]);
+            }
+          });
+
+          // Preencher o select com as opções
+          pokemonArray.forEach(pokemon => {
+            if (Array.isArray(pokemon)) {
+              pokemon.forEach(forma => {
+                $('#pokemon-list').append(new Option(forma, forma));
+              });
+            } else {
+              $('#pokemon-list').append(new Option(pokemon, pokemon));
+            }
+          });
+
+          $('#pokemon-list').select2({
+            placeholder: 'Escolha seus Pokémon',
+            allowClear: true,
+          });
         }
 
         await carregarGens();
@@ -120,17 +159,16 @@ $(document).ready(function () {
         function applyPrizePokemon(prize) {
           const pokemonList = prize.pokemonList || [];
 
-          const filteredPokemonList = pokemonList.filter(pokemon =>
-              allPokes.includes(pokemon)
-          );
+          const filteredPokemonList = pokemonList.filter(pokemon => {
+            return allPokemonData.some(p => p.name === pokemon);
+          });
+
           filteredPokemonList.forEach(pokemon => {
-            // Verifica se o Pokémon já está na lista de opções
             if ($('#pokemon-list').find(`option[value="${pokemon}"]`).length === 0) {
               $('#pokemon-list').append(new Option(pokemon, pokemon));
             }
           });
 
-          // Atualiza o select2 com os novos Pokémon (não modificamos o pokemonArray aqui)
           $('#pokemon-list').trigger('change');
         }
 
@@ -146,9 +184,10 @@ $(document).ready(function () {
           }
         }, 500));
 
-
         $('#pokemon-list').on('change', function () {
-          const selectedOptions = $(this).val();
+          const selectedOptions = $(this).val() || [];
+
+          // Verifica se ultrapassou o limite de lendários
           const lendariosSelecionados = selectedOptions.filter(pokemon =>
               lendariosLiberados.includes(pokemon)
           );
@@ -160,22 +199,30 @@ $(document).ready(function () {
               text: `Você pode selecionar no máximo ${qtdLimitado} Pokémon lendários.`,
             });
 
-            const removedOption = lendariosSelecionados.pop();
-            const novaSelecao = selectedOptions.filter(pokemon => pokemon !== removedOption);
-            $(this).val(novaSelecao).trigger('change');
+            // Reverte para a seleção anterior
+            const prevSelection = $(this).data('prevSelection') || [];
+            $(this).val(prevSelection).trigger('change.select2');
             return;
           }
 
+          // Verifica se ultrapassou o limite total de Pokémon
           if (selectedOptions.length > qtdEscolha) {
             Swal.fire({
               icon: 'warning',
               title: 'Limite Excedido',
               text: `Você pode selecionar no máximo ${qtdEscolha} Pokémon.`,
             });
-            const removedOption = selectedOptions.pop();
-            $(this).val(selectedOptions).trigger('change');
+
+            // Reverte para a seleção anterior
+            const prevSelection = $(this).data('prevSelection') || [];
+            $(this).val(prevSelection).trigger('change.select2');
+            return;
           }
+
+          // Atualiza a seleção anterior armazenada para a próxima alteração
+          $(this).data('prevSelection', selectedOptions);
         });
+
       })
       .catch(error => {
         Swal.fire({
@@ -185,6 +232,11 @@ $(document).ready(function () {
         });
         console.error('Erro ao buscar configurações:', error);
       });
+
+  // Função para encontrar dados de um Pokémon pelo nome
+  function encontrarPokemonPorNome(nome) {
+    return allPokemonData.find(pokemon => pokemon.name === nome);
+  }
 
   $('#simpleForm').on('submit', function (event) {
     event.preventDefault();
@@ -202,11 +254,11 @@ $(document).ready(function () {
       return;
     }
 
-    if (pokemonList.length !== 10) {
+    if (pokemonList.length !== qtdEscolha) {
       Swal.fire({
         icon: 'error',
         title: 'Seleção Inválida',
-        text: 'Você deve escolher exatamente 10 Pokémon para levar na sua jornada.',
+        text: 'Você deve escolher exatamente '+qtdEscolha+' Pokémon para levar na sua jornada.',
       });
       return;
     }
@@ -216,17 +268,28 @@ $(document).ready(function () {
       icon: 'info',
       title: 'Confirmar Escolha',
       html: pokemonList
-          .map(pokemon => {
-            const pokemonIndex = allPokes.indexOf(pokemon) + 1;
-            const spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/${sprites}/${pokemonIndex}.png`;
+          .map(pokemonName => {
+            const pokemonData = encontrarPokemonPorNome(pokemonName);
+            if (!pokemonData) return '';
+
+            const id = pokemonData.id;
+            let spriteUrl;
+
+            if (pokemonData.af) {
+              spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/black-white/${id}-${pokemonData.af}.png`;
+            } else {
+              spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/black-white/${id}.png`;
+            }
+
             return `
-            <div style="margin-bottom: 10px;">
-              <p><strong>${pokemon}</strong></p>
-              <img src="${spriteUrl}" alt="${pokemon}" style="width:100px; height:auto;">
-            </div>
-          `;
+              <div style="margin-bottom: 10px;">
+                <p><strong>${pokemonName}</strong></p>
+                <img src="${spriteUrl}" alt="${pokemonName}" style="width:100px; height:auto;">
+              </div>
+            `;
           })
           .join(''),
+
       showCancelButton: true,
       confirmButtonText: 'Confirmar',
       cancelButtonText: 'Cancelar',

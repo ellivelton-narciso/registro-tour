@@ -45,19 +45,28 @@ $(document).ready(function () {
                 allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             }
 
-            const pokemonArray = allPokes.filter(pokemon => !lendariosBanidos.includes(pokemon));
+            // Extrair os nomes dos Pokémon
+            let pokemonNames = [];
 
+            allPokes.forEach(pokemon => {
+                // Se for um objeto com name, extrair o name
+                if (typeof pokemon === 'object' && pokemon.name) {
+                    pokemonNames.push(pokemon.name);
+                } else {
+                    pokemonNames.push(pokemon);
+                }
+            });
+
+            pokemonNames = pokemonNames.filter(name => !lendariosBanidos.includes(name));
+
+            // Limpar e preencher os selects
             $('#limitados-list').empty();
-            pokemonArray.forEach(pokemon => {
-                const option = new Option(pokemon, pokemon);
-                $('#limitados-list').append(option);
-            });
             $('#ban-list').empty();
-            pokemonArray.forEach(pokemon => {
-                const option = new Option(pokemon, pokemon);
-                $('#ban-list').append(option);
-            });
 
+            pokemonNames.forEach(name => {
+                $('#limitados-list').append(new Option(name, name));
+                $('#ban-list').append(new Option(name, name));
+            });
 
             $('#limitados-list').trigger('change');
             $('#ban-list').trigger('change');
@@ -86,7 +95,6 @@ $(document).ready(function () {
                 const gen = parseInt(data.gen || 1);
                 await carregarGens(gen);
 
-                // Preencher os valores selecionados para banidos e limitados
                 $('#limitados-list').val(data.listaLimitado || []).trigger('change');
                 $('#ban-list').val(data.listaBanido || []).trigger('change');
             },
@@ -106,7 +114,7 @@ $(document).ready(function () {
         carregarGens(selectedGen);
     });
 
-    $('#submitConfig').on('click', function () {
+    $('#submitConfig').on('click', function (event) {
         event.preventDefault();
         const titulo = $('#titulo').val();
         const titulo2 = $('#titulo2').val();
@@ -117,8 +125,8 @@ $(document).ready(function () {
         const enviarDiscord = $('#notifications-enabled').prop('checked') ? 1 : 0;
         const prizes = $('#prizes-enabled').prop('checked') ? 1 : 0;
         const encerrado = $('#panel-enabled').prop('checked') ? 0 : 1;
-        const listaLimitado = $('#limitados-list').val();
-        const listaBanido = $('#ban-list').val();
+        const listaLimitado = $('#limitados-list').val() || [];
+        const listaBanido = $('#ban-list').val() || [];
         const qtdEscolha = $('#escolha-limit').val();
 
         $.ajax({

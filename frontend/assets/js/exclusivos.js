@@ -50,6 +50,15 @@ $(document).ready(async function () {
 
     async function abrirModal(isEdit = false, prize = {}) {
         const { id = '', nome = '', codigo = '', pokemonList = [] } = prize;
+        let pokemonNames = [];
+
+        allPokes.forEach(pokemon => {
+            if (typeof pokemon === 'object' && pokemon.name) {
+                pokemonNames.push(pokemon.name);
+            } else {
+                pokemonNames.push(pokemon);
+            }
+        });
 
         const { value: formData } = await Swal.fire({
             title: isEdit ? 'Editar Prêmio' : 'Adicionar Prêmio',
@@ -71,8 +80,8 @@ $(document).ready(async function () {
             confirmButtonText: isEdit ? 'Salvar Alterações' : 'Adicionar',
             didOpen: () => {
                 const select = $('#swalPrizeList');
-                allPokes.forEach(pokemon => {
-                    select.append(new Option(pokemon, pokemon));
+                pokemonNames.forEach(name => {
+                    select.append(new Option(name, name));
                 });
                 select.val(pokemonList).select2({
                     dropdownParent: Swal.getPopup(),

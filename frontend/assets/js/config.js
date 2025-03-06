@@ -1,1 +1,1 @@
-localStorage.urlBE = 'http://localhost:8000';
+localStorage.urlBE = 'https://api.registro-oldgen.vako.pt';
