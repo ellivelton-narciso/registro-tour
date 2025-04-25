@@ -179,6 +179,7 @@ app.get('/getConfig', (req, res) => {
 
       try {
         config.listaLimitado = JSON.parse(config.listaLimitado || '[]');
+        config.listaLimitadoLendario = JSON.parse(config.listaLimitadoLendario || '[]');
         config.listaBanido = JSON.parse(config.listaBanido || '[]');
       } catch (parseErr) {
         console.error('Erro ao analisar campos JSON:', parseErr);
@@ -197,10 +198,12 @@ app.post('/updateConfig', (req, res) => {
     gen,
     sprites,
     qtdLimitado,
+    qtdLimitadoLendario,
     qtdEscolha,
     hook,
     enviarDiscord,
     listaLimitado,
+    listaLimitadoLendario,
     listaBanido,
     encerrado,
     prizes
@@ -217,10 +220,12 @@ app.post('/updateConfig', (req, res) => {
     gen = ?, 
     sprites = ?,
     qtdEscolha = ?,
-    qtdLimitado = ?, 
+    qtdLimitado = ?,
+    qtdLimitadoLendario = ?, 
     hook = ?, 
     enviarDiscord = ?, 
-    listaLimitado = ?, 
+    listaLimitado = ?,
+    listaLimitadoLendario = ?, 
     listaBanido = ?,
     encerrado = ?,
     prizes = ?
@@ -233,9 +238,11 @@ app.post('/updateConfig', (req, res) => {
     sprites,
     qtdEscolha,
     qtdLimitado,
+    qtdLimitadoLendario,
     hook ? hook : '',
     enviarDiscord ? 1 : 0,
     JSON.stringify(listaLimitado || []),
+    JSON.stringify(listaLimitadoLendario || []),
     JSON.stringify(listaBanido || []),
     encerrado ? 1 : 0,
     prizes ? 1 : 0
