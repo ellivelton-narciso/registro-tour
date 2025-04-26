@@ -51,10 +51,12 @@ $(document).ready(function () {
           $('#codigo').hide();
         }
 
-        let lendariosLiberados = config.listaLimitado || [];
+        let pokemonsLimitados = config.listaLimitado || [];
+        let lendariosLimitados = config.listaLimitadoLendario || [];
         let lendariosBanidos = config.listaBanido || [];
         let gen = config.gen || 3;
         let qtdLimitado = config.qtdLimitado || 2;
+        let qtdLimitadoLendario = config. qtdLimitadoLendario || 2
         qtdEscolha = config.qtdEscolha || 10;
         sprites = config.sprites || 'emerald';
 
@@ -121,7 +123,6 @@ $(document).ready(function () {
             pokemonPorId[id].push(pokemon.name);
           });
 
-          // Transformar os grupos em arrays ou strings para o formato esperado
           pokemonArray = [];
           allPokes = [];
 
@@ -137,7 +138,6 @@ $(document).ready(function () {
             }
           });
 
-          // Preencher o select com as opções
           pokemonArray.forEach(pokemon => {
             if (Array.isArray(pokemon)) {
               pokemon.forEach(forma => {
@@ -188,15 +188,15 @@ $(document).ready(function () {
           const selectedOptions = $(this).val() || [];
 
           // Verifica se ultrapassou o limite de lendários
-          const lendariosSelecionados = selectedOptions.filter(pokemon =>
-              lendariosLiberados.includes(pokemon)
+          const limitadosSelecionados = selectedOptions.filter(pokemon =>
+              pokemonsLimitados.includes(pokemon)
           );
 
-          if (lendariosSelecionados.length > qtdLimitado) {
+          if (limitadosSelecionados.length > qtdLimitado) {
             Swal.fire({
               icon: 'warning',
-              title: 'Limite de Lendários Excedido',
-              text: `Você pode selecionar no máximo ${qtdLimitado} Pokémon lendários.`,
+              title: 'Limite de Pokemons Limitados Excedido',
+              text: `Você pode selecionar no máximo ${qtdLimitado} Pokémon limitados.`,
             });
 
             // Reverte para a seleção anterior
@@ -204,6 +204,23 @@ $(document).ready(function () {
             $(this).val(prevSelection).trigger('change.select2');
             return;
           }
+
+          const lendariosSelecionados = selectedOptions.filter(pokemon =>
+            lendariosLimitados.includes(pokemon)
+        );
+
+        if (lendariosSelecionados.length > qtdLimitadoLendario) {
+          Swal.fire({
+            icon: 'warning',
+            title: 'Limite de Lendários Excedido',
+            text: `Você pode selecionar no máximo ${qtdLimitadoLendario} Pokémon lendários.`,
+          });
+
+          // Reverte para a seleção anterior
+          const prevSelection = $(this).data('prevSelection') || [];
+          $(this).val(prevSelection).trigger('change.select2');
+          return;
+        }
 
           // Verifica se ultrapassou o limite total de Pokémon
           if (selectedOptions.length > qtdEscolha) {
