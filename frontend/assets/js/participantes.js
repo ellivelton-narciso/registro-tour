@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
+    const urlBE = localStorage.getItem('urlBE')
     function getTrainers() {
-        fetch(`${localStorage.getItem('urlBE')}/getTrainers`)
+        fetch(`${urlBE}/getTrainers`)
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
@@ -63,6 +64,50 @@ document.addEventListener('DOMContentLoaded', function () {
             responsive: true,
         });
     }
+
+    async function deleteTrainer(idToDelete) {
+        const url = `${urlBE}/deleteTrainers/${idToDelete}`;
+        try {
+          const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+      
+          const result = await response.json();
+      
+          if (!response.ok) {
+            console.error(`Erro ao deletar treinador(es) (Status: ${response.status}):`, result.error || result.message);
+            throw new Error(result.error || result.message || 'Erro ao deletar treinador(es).');
+          }
+          return result;
+      
+        } catch (error) {
+          console.error('Erro na requisição DELETE:', error);
+          throw error;
+        }
+    }
+
+    $('#resetarDados').on('click', (event)=>{
+        event.preventDefault();
+        
+        deleteTrainer('all')
+            .then(data => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Treinadores deletados',
+                    text: data.message,
+                });
+            })
+            .catch(() => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: 'Erro ao resetar lista de participantes, tente novamente mais tarde.',
+                });
+            })
+    })
 
     getTrainers();
 });
