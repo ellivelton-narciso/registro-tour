@@ -4,7 +4,7 @@ $(document).ready(function () {
     let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen, allPokes = [];
     const lendariosBanidos = [];
 
-    $('#limitados-list, #ban-list').select2({
+    $('#limitados-list, #ban-list, #legendary-list').select2({
         placeholder: "Selecione os Pokémon",
         width: '100%'
     });
@@ -45,11 +45,9 @@ $(document).ready(function () {
                 allPokes = primeiraGen.concat(segundaGen, terceiraGen, quartaGen, quintaGen);
             }
 
-            // Extrair os nomes dos Pokémon
             let pokemonNames = [];
 
             allPokes.forEach(pokemon => {
-                // Se for um objeto com name, extrair o name
                 if (typeof pokemon === 'object' && pokemon.name) {
                     pokemonNames.push(pokemon.name);
                 } else {
@@ -59,16 +57,18 @@ $(document).ready(function () {
 
             pokemonNames = pokemonNames.filter(name => !lendariosBanidos.includes(name));
 
-            // Limpar e preencher os selects
             $('#limitados-list').empty();
+            $('#legendary-list').empty();
             $('#ban-list').empty();
 
             pokemonNames.forEach(name => {
                 $('#limitados-list').append(new Option(name, name));
+                $('#legendary-list').append(new Option(name, name));
                 $('#ban-list').append(new Option(name, name));
             });
 
             $('#limitados-list').trigger('change');
+            $('#legendary-list').trigger('change');
             $('#ban-list').trigger('change');
         } catch (error) {
             console.error('Erro ao carregar os arquivos JSON:', error);
@@ -85,7 +85,8 @@ $(document).ready(function () {
                 $('#titulo2').val(data.titulo2 || '');
                 $('#generation').val(data.gen || '1').change();
                 $('#game-sprites').val(data.sprites || 'red-green').change();
-                $('#legendary-limit').val(data.qtdLimitado || 2);
+                $('#limitados-limit').val(data.qtdLimitado || 2);
+                $('#legendary-limit').val(data.qtdLimitadoLendario || 2);
                 $('#webhook').val(data.hook || '');
                 $('#notifications-enabled').prop('checked', data.enviarDiscord === 1);
                 $('#prizes-enabled').prop('checked', data.prizes === 1);
@@ -96,6 +97,7 @@ $(document).ready(function () {
                 await carregarGens(gen);
 
                 $('#limitados-list').val(data.listaLimitado || []).trigger('change');
+                $('#legendary-list').val(data.listaLimitadoLendario || []).trigger('change');
                 $('#ban-list').val(data.listaBanido || []).trigger('change');
             },
             error: function () {
@@ -120,12 +122,14 @@ $(document).ready(function () {
         const titulo2 = $('#titulo2').val();
         const gen = $('#generation').val();
         const sprites = $('#game-sprites').val();
-        const qtdLimitado = $('#legendary-limit').val();
+        const qtdLimitado = $('#limitados-limit').val();
+        const qtdLimitadoLendario = $('#legendary-limit').val();
         const hook = $('#webhook').val();
         const enviarDiscord = $('#notifications-enabled').prop('checked') ? 1 : 0;
         const prizes = $('#prizes-enabled').prop('checked') ? 1 : 0;
         const encerrado = $('#panel-enabled').prop('checked') ? 0 : 1;
         const listaLimitado = $('#limitados-list').val() || [];
+        const listaLimitadoLendario = $('#legendary-list').val() || [];
         const listaBanido = $('#ban-list').val() || [];
         const qtdEscolha = $('#escolha-limit').val();
 
@@ -139,10 +143,12 @@ $(document).ready(function () {
                 gen,
                 sprites,
                 qtdLimitado,
+                qtdLimitadoLendario,
                 hook,
                 enviarDiscord,
                 encerrado,
                 listaLimitado,
+                listaLimitadoLendario,
                 listaBanido,
                 qtdEscolha,
                 prizes
