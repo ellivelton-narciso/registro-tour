@@ -341,6 +341,52 @@ app.get('/getTrainers', (req, res) => {
   });
 });
 
+app.delete('/deleteTrainers/:id', (req, res) => {
+  const trainerId = req.params.id;
+
+  let query = '';
+  let queryParams = [];
+
+  if (trainerId === 'all') {
+    query = 'DELETE FROM trainers';
+  } else {
+    const idAsNumber = parseInt(trainerId, 10);
+
+    if (isNaN(idAsNumber)) {
+      return res.status(400).json({ error: 'ID de treinador inválido. Use um número ou "all".' });
+    }
+
+    query = 'DELETE FROM trainers WHERE id = ?';
+    queryParams = [idAsNumber];
+  }
+
+  connection.getConnection((err, conn) => {
+    if (err) {
+      console.error('Erro ao obter conexão do pool:', err);
+      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    }
+
+    conn.query(query, queryParams, (err, result) => {
+      conn.release();
+
+      if (err) {
+        console.error('Erro ao deletar dados no banco:', err);
+        return res.status(500).json({ error: 'Erro ao deletar dados no banco de dados.' });
+      }
+
+      if (result.affectedRows === 0 && trainerId !== 'all') {
+        return res.status(404).json({ message: `Treinador com ID ${trainerId} não encontrado.` });
+      }
+
+      if (trainerId === 'all') {
+        return res.status(200).json({ message: `${result.affectedRows} treinador(es) deletado(s).` });
+      } else {
+        return res.status(200).json({ message: `Treinador com ID ${trainerId} deletado com sucesso.` });
+      }
+    });
+  });
+});
+
 app.post('/submitPrizes', (req, res) => {
   const { id, nome, codigo, pokemonList } = req.body;
 
