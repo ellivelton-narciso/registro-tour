@@ -89,25 +89,39 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    $('#resetarDados').on('click', (event)=>{
+    $('#resetarDados').on('click', (event) => {
         event.preventDefault();
-        
-        deleteTrainer('all')
-            .then(data => {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Treinadores deletados',
-                    text: data.message,
-                });
-            })
-            .catch(() => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro',
-                    text: 'Erro ao resetar lista de participantes, tente novamente mais tarde.',
-                });
-            })
-    })
+    
+        Swal.fire({
+            title: 'Tem certeza?',
+            text: 'Esta ação irá deletar todos os treinadores!',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sim, deletar!',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                deleteTrainer('all')
+                    .then(data => {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Treinadores deletados',
+                            text: data.message,
+                        });
+                    })
+                    .catch(() => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro',
+                            text: 'Erro ao resetar lista de participantes, tente novamente mais tarde.',
+                        });
+                    });
+            }
+        });
+    });
+    
 
     getTrainers();
 });
