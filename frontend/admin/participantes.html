@@ -77,15 +77,17 @@
 
 <section>
   <div class="card">
-    <div class="card-header">
-      <h4>Lista de Participantes</h4>
-      <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#pokemonTableCollapse" aria-expanded="false" aria-controls="pokemonTableCollapse">
-        Mostrar Tabela de Participantes
-      </button>
-      <button class="btn btn-danger" type="button" id="resetarDados">
-        Resetar Participantes
-      </button>
-    </div>
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <h4 class="flex-grow-1 mb-2 mb-sm-0">Lista de Participantes</h4>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#pokemonTableCollapse" aria-expanded="false" aria-controls="pokemonTableCollapse">
+          Mostrar Tabela de Participantes
+        </button>
+        <button class="btn btn-danger" type="button" id="resetarDados">
+          Resetar Participantes
+        </button>
+      </div>
+    </div>    
     <div class="card-body">
       <div class="collapse" id="pokemonTableCollapse">
         <table id="pokemonTable" class="display">
