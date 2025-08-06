@@ -51,6 +51,17 @@ $(document).ready(function () {
           $('#codigo').hide();
         }
 
+        if (config.monotype === 0) {
+          $('label[for="monotype-list"]').hide();
+          $('#monotype-list').hide()
+        } else {
+          $('#monotype-list').select2({
+            placeholder: 'Escolha seu tipo',
+            allowClear: true,
+            multiple: false,
+          });
+        }
+
         let pokemonsLimitados = config.listaLimitado || [];
         let lendariosLimitados = config.listaLimitadoLendario || [];
         let lendariosBanidos = config.listaBanido || [];
@@ -64,9 +75,8 @@ $(document).ready(function () {
         $('#title2').text(config.titulo2);
         $('#labelSelect').text(`Selecione até ${qtdEscolha} Pokémon`);
 
-        let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen;
-
         async function carregarGens() {
+          let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen;
           try {
             const [gen1, gen2, gen3, gen4, gen5] = await Promise.all([
               fetch('assets/json/primeiraGen.json').then(response => response.json()),
@@ -152,6 +162,39 @@ $(document).ready(function () {
             placeholder: 'Escolha seus Pokémon',
             allowClear: true,
           });
+
+          const selectedType = $('#monotype-list').val();
+
+          if (config.monotype === 1 && selectedType) {
+            $('#pokemon-list').empty();
+
+            const pokemonsFiltrados = allPokes.filter(pokemon => {
+              const nome = Array.isArray(pokemon) ? pokemon[0] : pokemon;
+              const data = encontrarPokemonPorNome(nome);
+              return data && data.type.includes(selectedType);
+            });
+
+            pokemonsFiltrados.forEach(pokemon => {
+              if (Array.isArray(pokemon)) {
+                pokemon.forEach(forma => {
+                  $('#pokemon-list').append(new Option(forma, forma));
+                });
+              } else {
+                $('#pokemon-list').append(new Option(pokemon, pokemon));
+              }
+            });
+          } else {
+            pokemonArray.forEach(pokemon => {
+              if (Array.isArray(pokemon)) {
+                pokemon.forEach(forma => {
+                  $('#pokemon-list').append(new Option(forma, forma));
+                });
+              } else {
+                $('#pokemon-list').append(new Option(pokemon, pokemon));
+              }
+            });
+          }
+
         }
 
         await carregarGens();
@@ -239,6 +282,47 @@ $(document).ready(function () {
           // Atualiza a seleção anterior armazenada para a próxima alteração
           $(this).data('prevSelection', selectedOptions);
         });
+
+        $('#monotype-list').on('change', function () {
+          const selectedType = $(this).val();
+
+          // Limpa a seleção atual de Pokémon
+          $('#pokemon-list').val(null).trigger('change.select2');
+          $('#pokemon-list').empty();
+
+          if (!selectedType) {
+            pokemonArray.forEach(pokemon => {
+              if (Array.isArray(pokemon)) {
+                pokemon.forEach(forma => {
+                  $('#pokemon-list').append(new Option(forma, forma));
+                });
+              } else {
+                $('#pokemon-list').append(new Option(pokemon, pokemon));
+              }
+            });
+
+            return;
+          }
+
+          // Filtra os Pokémon com o tipo selecionado
+          const pokemonsFiltrados = allPokes.filter(pokemon => {
+            const nome = Array.isArray(pokemon) ? pokemon[0] : pokemon;
+            const data = encontrarPokemonPorNome(nome);
+            return data && data.type.includes(selectedType);
+          });
+
+          // Adiciona ao select apenas os Pokémon com o tipo escolhido
+          pokemonsFiltrados.forEach(pokemon => {
+            if (Array.isArray(pokemon)) {
+              pokemon.forEach(forma => {
+                $('#pokemon-list').append(new Option(forma, forma));
+              });
+            } else {
+              $('#pokemon-list').append(new Option(pokemon, pokemon));
+            }
+          });
+        });
+
 
       })
       .catch(error => {

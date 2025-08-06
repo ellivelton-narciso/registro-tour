@@ -91,6 +91,7 @@ $(document).ready(function () {
                 $('#notifications-enabled').prop('checked', data.enviarDiscord === 1);
                 $('#prizes-enabled').prop('checked', data.prizes === 1);
                 $('#panel-enabled').prop('checked', data.encerrado === 0);
+                $('#monotype-enabled').prop('checked', data.monotype === 1);
                 $('#escolha-limit').val(data.qtdEscolha || 10);
 
                 const gen = parseInt(data.gen || 1);
@@ -132,6 +133,7 @@ $(document).ready(function () {
         const listaLimitadoLendario = $('#legendary-list').val() || [];
         const listaBanido = $('#ban-list').val() || [];
         const qtdEscolha = $('#escolha-limit').val();
+        const monotype = $('#monotype-enabled').prop('checked') ? 1 : 0;
 
         $.ajax({
             url: `${apiUrl}/updateConfig`,
@@ -151,7 +153,8 @@ $(document).ready(function () {
                 listaLimitadoLendario,
                 listaBanido,
                 qtdEscolha,
-                prizes
+                prizes,
+                monotype
             }),
             success: function () {
                 Swal.fire({
