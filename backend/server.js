@@ -206,7 +206,8 @@ app.post('/updateConfig', (req, res) => {
     listaLimitadoLendario,
     listaBanido,
     encerrado,
-    prizes
+    prizes,
+    monotype
   } = req.body;
 
   // Validar os dados recebidos
@@ -228,7 +229,8 @@ app.post('/updateConfig', (req, res) => {
     listaLimitadoLendario = ?, 
     listaBanido = ?,
     encerrado = ?,
-    prizes = ?
+    prizes = ?,
+    monotype = ?
     WHERE id = 1`;
 
   const values = [
@@ -245,7 +247,8 @@ app.post('/updateConfig', (req, res) => {
     JSON.stringify(listaLimitadoLendario || []),
     JSON.stringify(listaBanido || []),
     encerrado ? 1 : 0,
-    prizes ? 1 : 0
+    prizes ? 1 : 0,
+    monotype ? 1 : 0,
   ];
 
   connection.getConnection((err, conn) => {

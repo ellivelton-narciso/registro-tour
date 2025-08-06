@@ -14,6 +14,7 @@ CREATE TABLE config (
     qtdEscolha INT(11) DEFAULT NULL,
     encerrado TINYINT(1) DEFAULT 0,
     prizes TINYINT(1) DEFAULT 0,
+    monotype TINYINT(1) DEFAULT 0,
     PRIMARY KEY (id)
 );
 
