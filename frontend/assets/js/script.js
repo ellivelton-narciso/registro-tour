@@ -57,7 +57,6 @@ $(document).ready(function () {
         } else {
           $('#monotype-list').select2({
             placeholder: 'Escolha seu tipo',
-            allowClear: true,
             multiple: false,
           });
         }
