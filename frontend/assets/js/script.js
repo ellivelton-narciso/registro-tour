@@ -119,7 +119,6 @@ $(document).ready(function () {
 
         function processarPokemonData() {
           const pokemonPorId = {};
-
           const pokemonNaoBanidos = allPokemonData.filter(pokemon =>
               !lendariosBanidos.includes(pokemon.name)
           );
@@ -137,36 +136,19 @@ $(document).ready(function () {
 
           Object.values(pokemonPorId).forEach(grupo => {
             if (grupo.length > 1) {
-              // Mais de uma forma, adicionar como array
               pokemonArray.push(grupo);
               allPokes.push(grupo);
             } else {
-              // Apenas uma forma, adicionar como string
               pokemonArray.push(grupo[0]);
               allPokes.push(grupo[0]);
             }
           });
 
-          pokemonArray.forEach(pokemon => {
-            if (Array.isArray(pokemon)) {
-              pokemon.forEach(forma => {
-                $('#pokemon-list').append(new Option(forma, forma));
-              });
-            } else {
-              $('#pokemon-list').append(new Option(pokemon, pokemon));
-            }
-          });
-
-          $('#pokemon-list').select2({
-            placeholder: 'Escolha seus Pokémon',
-            allowClear: true,
-          });
+          $('#pokemon-list').empty();
 
           const selectedType = $('#monotype-list').val();
 
           if (config.monotype === 1 && selectedType) {
-            $('#pokemon-list').empty();
-
             const pokemonsFiltrados = allPokes.filter(pokemon => {
               const nome = Array.isArray(pokemon) ? pokemon[0] : pokemon;
               const data = encontrarPokemonPorNome(nome);
@@ -194,6 +176,10 @@ $(document).ready(function () {
             });
           }
 
+          $('#pokemon-list').select2({
+            placeholder: 'Escolha seus Pokémon',
+            allowClear: true,
+          });
         }
 
         await carregarGens();
@@ -376,9 +362,9 @@ $(document).ready(function () {
             let spriteUrl;
 
             if (pokemonData.af) {
-              spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/black-white/${id}-${pokemonData.af}.png`;
+              spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/${sprites}/${id}-${pokemonData.af}.png`;
             } else {
-              spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/black-white/${id}.png`;
+              spriteUrl = `https://veekun.com/dex/media/pokemon/main-sprites/${sprites}/${id}.png`;
             }
 
             return `
