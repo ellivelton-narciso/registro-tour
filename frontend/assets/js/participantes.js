@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('qtdDiferentes').innerText = qtdDiferentes;
 
                     populatePokemonTable(data);
+                    populateRankingTable(data);
                 }
             })
             .catch(error => {
@@ -68,30 +69,74 @@ document.addEventListener('DOMContentLoaded', function () {
     async function deleteTrainer(idToDelete) {
         const url = `${urlBE}/deleteTrainers/${idToDelete}`;
         try {
-          const response = await fetch(url, {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          });
-      
-          const result = await response.json();
-      
-          if (!response.ok) {
-            console.error(`Erro ao deletar treinador(es) (Status: ${response.status}):`, result.error || result.message);
-            throw new Error(result.error || result.message || 'Erro ao deletar treinador(es).');
-          }
-          return result;
-      
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                console.error(`Erro ao deletar treinador(es) (Status: ${response.status}):`, result.error || result.message);
+                throw new Error(result.error || result.message || 'Erro ao deletar treinador(es).');
+            }
+            return result;
+
         } catch (error) {
-          console.error('Erro na requisição DELETE:', error);
-          throw error;
+            console.error('Erro na requisição DELETE:', error);
+            throw error;
+        }
+    }
+
+    function getPokemonRanking(trainers) {
+        const counts = {};
+
+        trainers.forEach(trainer => {
+            trainer.pokemonList.forEach(pokemon => {
+                counts[pokemon] = (counts[pokemon] || 0) + 1;
+            });
+        });
+
+        return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    }
+
+    function populateRankingTable(trainers) {
+        const ranking = getPokemonRanking(trainers);
+
+        const rankingBody = document.getElementById('rankingTableBody');
+        rankingBody.innerHTML = '';
+
+        ranking.forEach(([pokemon, count], index) => {
+            const row = document.createElement('tr');
+
+            const posCell = document.createElement('td');
+            posCell.textContent = index + 1;
+            row.appendChild(posCell);
+
+            const pokemonCell = document.createElement('td');
+            pokemonCell.textContent = pokemon;
+            row.appendChild(pokemonCell);
+
+            const countCell = document.createElement('td');
+            countCell.textContent = count;
+            row.appendChild(countCell);
+
+            rankingBody.appendChild(row);
+        });
+
+        if (!$.fn.DataTable.isDataTable('#rankingTable')) {
+            $('#rankingTable').DataTable({
+                responsive: true,
+                order: [[2, 'desc']]
+            });
         }
     }
 
     $('#resetarDados').on('click', (event) => {
         event.preventDefault();
-    
+
         Swal.fire({
             title: 'Tem certeza?',
             text: 'Esta ação irá deletar todos os treinadores!',
@@ -121,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
-    
+
 
     getTrainers();
 });
