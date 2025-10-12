@@ -1,2 +1,5 @@
 .idea/
 */.env
+k8s/
+node_modules/
+dist/

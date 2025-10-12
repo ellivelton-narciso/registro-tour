@@ -1,197 +1,104 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors'); 
+const cors = require('cors');
 const axios = require('axios');
-const connection = require('./db/connection');
+const pool = require('./db/connection');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-app.post('/submit', (req, res) => {
-  const { name, email, pokemonList, codigo } = req.body;
-
-  if (!name || !email || !pokemonList) {
-    return res.status(400).json({
-      error: 'Dados inválidos. Certifique-se de preencher todos os campos.',
-    });
+app.post('/submit', async (req, res) => {
+  const { name, email, pokemonList, tournamentId } = req.body;
+  if (!name || !pokemonList || !tournamentId) {
+    return res.status(400).json({ error: 'Dados inválidos. Preencha todos os campos obrigatórios.' });
   }
 
-  const configQuery = 'SELECT qtdEscolha, enviarDiscord, hook FROM config LIMIT 1';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    const playerResult = await client.query(
+      'SELECT * FROM players WHERE name = $1',
+      [name]
+    );
+    if (playerResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Jogador não cadastrado. Um admin precisa cadastrar antes.' });
+    }
+    const player = playerResult.rows[0];
+
+    if (email && email !== player.email) {
+      await client.query(
+        'UPDATE players SET email = $1 WHERE id = $2',
+        [email, player.id]
+      );
     }
 
-    conn.query(configQuery, (err, configResults) => {
-      if (err) {
-        conn.release();
-        console.error('Erro ao buscar configuração no banco:', err);
-        return res.status(500).json({ error: 'Erro ao buscar configuração do banco.' });
-      }
-
-      if (configResults.length === 0) {
-        conn.release();
-        return res.status(500).json({ error: 'Configuração não encontrada.' });
-      }
-
-      const { qtdEscolha, enviarDiscord, hook } = configResults[0];
-
-      if (pokemonList.length !== qtdEscolha) {
-        conn.release();
-        return res.status(400).json({
-          error: `Dados inválidos. Certifique-se de selecionar exatamente ${qtdEscolha} Pokémon.`,
-        });
-      }
-
-      let validCodigo = null;
-      if (codigo) {
-        const codigoQuery = 'SELECT COUNT(*) AS count FROM prizes WHERE codigo = ?';
-        conn.query(codigoQuery, [codigo], (err, countResults) => {
-          if (err) {
-            conn.release();
-            console.error('Erro ao verificar código na tabela prizes:', err);
-            return res.status(500).json({ error: 'Erro ao verificar código no banco.' });
-          }
-
-          if (countResults[0].count > 0) {
-            validCodigo = codigo;
-          } else {
-            validCodigo = null;
-          }
-
-          const insertQuery = 'INSERT INTO trainers (name, email, pokemon_list, codigo) VALUES (?, ?, ?, ?)';
-          const values = [name, email, JSON.stringify(pokemonList), validCodigo];
-
-          conn.query(insertQuery, values, async (err, results) => {
-            if (err) {
-              conn.release();
-
-              if (err.code === 'ER_DUP_ENTRY') {
-                if (err.message.includes('name')) {
-                  return res.status(400).json({
-                    error: 'O nome de usuário já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-                  });
-                } else if (err.message.includes('email')) {
-                  return res.status(400).json({
-                    error: 'O contato já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-                  });
-                }
-              }
-              console.error('Erro ao salvar dados no banco:', err);
-              return res.status(500).json({ error: 'Erro ao salvar dados no banco de dados.' });
-            }
-
-            if (enviarDiscord && hook) {
-              const webhookUrl = hook;
-              const discordMessage = {
-                content: `🎉 **Novo Participante no Torneio!**\n🧑 Boa sorte ${name} !`,
-              };
-
-              try {
-                await axios.post(webhookUrl, discordMessage);
-                console.log(`Notificação enviada ao Discord para o participante: ${name}`);
-              } catch (discordErr) {
-                console.error('Erro ao enviar notificação ao Discord:', discordErr);
-              }
-            } else {
-              console.log('Configuração de webhook não encontrada ou desabilitada.');
-            }
-
-            conn.release();
-            return res.status(200).json({ message: 'Dados enviados com sucesso!' });
-          });
-        });
-      } else {
-        validCodigo = null;
-
-        const insertQuery = 'INSERT INTO trainers (name, email, pokemon_list, codigo) VALUES (?, ?, ?, ?)';
-        const values = [name, email, JSON.stringify(pokemonList), validCodigo];
-
-        conn.query(insertQuery, values, async (err, results) => {
-          if (err) {
-            conn.release();
-
-            if (err.code === 'ER_DUP_ENTRY') {
-              if (err.message.includes('name')) {
-                return res.status(400).json({
-                  error: 'O nome de usuário já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-                });
-              } else if (err.message.includes('email')) {
-                return res.status(400).json({
-                  error: 'O contato já está em uso. Caso já tenha se cadastrado e queira editar, fale com Vako/Elli para remover teu cadastro.',
-                });
-              }
-            }
-            console.error('Erro ao salvar dados no banco:', err);
-            return res.status(500).json({ error: 'Erro ao salvar dados no banco de dados.' });
-          }
-
-          if (enviarDiscord && hook) {
-            const webhookUrl = hook;
-            const discordMessage = {
-              content: `🎉 **Novo Participante no Torneio!**\n🧑 Boa sorte ${name} !`,
-            };
-
-            try {
-              await axios.post(webhookUrl, discordMessage);
-              console.log(`Notificação enviada ao Discord para o participante: ${name}`);
-            } catch (discordErr) {
-              console.error('Erro ao enviar notificação ao Discord:', discordErr);
-            }
-          } else {
-            console.log('Configuração de webhook não encontrada ou desabilitada.');
-          }
-
-          conn.release();
-          return res.status(200).json({ message: 'Dados enviados com sucesso!' });
-        });
-      }
-    });
-  });
-});
-
-app.get('/getConfig', (req, res) => {
-  const query = 'SELECT * FROM config LIMIT 1';
-
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    const participantCheck = await client.query(
+      'SELECT * FROM participants WHERE tournaments_id = $1 AND players_id = $2',
+      [tournamentId, player.id]
+    );
+    if (participantCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Jogador já cadastrado neste torneio.' });
     }
 
-    conn.query(query, (err, results) => {
-      conn.release();
+    const participantInsert = await client.query(
+      'INSERT INTO participants (tournaments_id, players_id) VALUES ($1, $2) RETURNING id',
+      [tournamentId, player.id]
+    );
+    const participantId = participantInsert.rows[0].id;
 
-      if (err) {
-        console.error('Erro ao buscar dados do banco:', err);
-        return res.status(500).json({ error: 'Erro ao buscar dados do banco de dados.' });
-      }
+    const pokemonsResult = await client.query(
+      'SELECT id, name FROM pokemons WHERE name = ANY($1::text[])',
+      [pokemonList]
+    );
+    if (pokemonsResult.rows.length !== pokemonList.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Um ou mais Pokémon não encontrados.' });
+    }
 
-      if (results.length === 0) {
-        return res.status(404).json({ error: 'Nenhuma configuração encontrada.' });
-      }
+    for (const poke of pokemonsResult.rows) {
+      await client.query(
+        'INSERT INTO choices (participants_id, pokemons_id, tournaments_id) VALUES ($1, $2, $3)',
+        [participantId, poke.id, tournamentId]
+      );
+    }
 
-      const config = results[0];
+    await client.query('COMMIT');
 
-      try {
-        config.listaLimitado = JSON.parse(config.listaLimitado || '[]');
-        config.listaLimitadoLendario = JSON.parse(config.listaLimitadoLendario || '[]');
-        config.listaBanido = JSON.parse(config.listaBanido || '[]');
-      } catch (parseErr) {
-        console.error('Erro ao analisar campos JSON:', parseErr);
-        return res.status(500).json({ error: 'Erro ao processar dados da configuração.' });
-      }
-
-      return res.status(200).json(config);
-    });
-  });
+    return res.status(200).json({ message: 'Participante cadastrado com sucesso no torneio!' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao cadastrar participante no torneio.' });
+  } finally {
+    client.release();
+  }
 });
 
-app.post('/updateConfig', (req, res) => {
+
+app.get('/getConfig', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM v_config LIMIT 1');
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Nenhuma configuração encontrada.' });
+
+    const config = result.rows[0];
+    config.listaLimitado = JSON.parse(config.listaLimitado || '[]');
+    config.listaLimitadoLendario = JSON.parse(config.listaLimitadoLendario || '[]');
+    config.listaBanido = JSON.parse(config.listaBanido || '[]');
+
+    return res.status(200).json(config);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao processar dados da configuração.' });
+  }
+});
+
+
+app.post('/createTournament', async (req, res) => {
   const {
     titulo,
     titulo2,
@@ -210,291 +117,370 @@ app.post('/updateConfig', (req, res) => {
     monotype
   } = req.body;
 
-  // Validar os dados recebidos
+  // Validação básica
   if (!titulo || !gen || !sprites || !qtdLimitado) {
-    return res.status(400).json({ error: 'Dados inválidos. Verifique os campos obrigatórios.' });
+    return res.status(400).json({ error: 'Campos obrigatórios não preenchidos.' });
   }
 
-  const query = `UPDATE config SET 
-    titulo = ?, 
-    titulo2 = ?, 
-    gen = ?, 
-    sprites = ?,
-    qtdEscolha = ?,
-    qtdLimitado = ?,
-    qtdLimitadoLendario = ?, 
-    hook = ?, 
-    enviarDiscord = ?, 
-    listaLimitado = ?,
-    listaLimitadoLendario = ?, 
-    listaBanido = ?,
-    encerrado = ?,
-    prizes = ?,
-    monotype = ?
-    WHERE id = 1`;
+  try {
+    const query = `
+      INSERT INTO tournaments (
+        name,
+        titulo2,
+        gen,
+        sprites,
+        qtdEscolha,
+        qtdLimitado,
+        qtdLimitadoLendario,
+        hook,
+        enviarDiscord,
+        listaLimitado,
+        listaLimitadoLendario,
+        listaBanido,
+        encerrado,
+        prizes,
+        monotype
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+      )
+      RETURNING id
+    `;
 
-  const values = [
+    const values = [
+      titulo,
+      titulo2 || '',
+      gen,
+      sprites,
+      qtdEscolha || null,
+      qtdLimitado,
+      qtdLimitadoLendario || null,
+      hook || '',
+      enviarDiscord || false,
+      listaLimitado || [],
+      listaLimitadoLendario || [],
+      listaBanido || [],
+      encerrado || false,
+      prizes || false,
+      monotype || false
+    ];
+
+    const result = await pool.query(query, values);
+
+    const newTournamentId = result.rows[0].id;
+
+    return res.status(201).json({
+      message: 'Torneio criado com sucesso!',
+      tournamentId: newTournamentId
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao criar o torneio.' });
+  }
+});
+
+
+app.post('/updateConfig', async (req, res) => {
+  const {
+    tournamentId,
     titulo,
-    titulo2 || '',
+    titulo2,
     gen,
     sprites,
-    qtdEscolha,
     qtdLimitado,
     qtdLimitadoLendario,
-    hook ? hook : '',
-    enviarDiscord ? 1 : 0,
-    JSON.stringify(listaLimitado || []),
-    JSON.stringify(listaLimitadoLendario || []),
-    JSON.stringify(listaBanido || []),
-    encerrado ? 1 : 0,
-    prizes ? 1 : 0,
-    monotype ? 1 : 0,
-  ];
+    qtdEscolha,
+    hook,
+    enviarDiscord,
+    listaLimitado,
+    listaLimitadoLendario,
+    listaBanido,
+    encerrado,
+    prizes,
+    monotype,
+    dateEnd
+  } = req.body;
 
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
-    }
-
-    conn.query(query, values, (err, results) => {
-      conn.release();
-
-      if (err) {
-        console.error('Erro ao atualizar configurações no banco:', err);
-        return res.status(500).json({ error: 'Erro ao atualizar configurações no banco de dados.' });
-      }
-
-      return res.status(200).json({ message: 'Configurações atualizadas com sucesso!' });
-    });
-  });
-});
-
-app.post('/login', (req, res) => {
-  const { user, password } = req.body;
-
-  if (!user || !password) {
-    return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+  if (!tournamentId || !titulo || !gen || !sprites || !qtdLimitado) {
+    return res.status(400).json({ error: 'Campos obrigatórios não preenchidos.' });
   }
 
-  const query = 'SELECT * FROM usuarios WHERE user = ? LIMIT 1';
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+  try {
+    const query = `
+      UPDATE tournaments SET
+        name = $1,
+        titulo2 = $2,
+        gen = $3,
+        sprites = $4,
+        qtdEscolha = $5,
+        qtdLimitado = $6,
+        qtdLimitadoLendario = $7,
+        hook = $8,
+        enviarDiscord = $9,
+        listaLimitado = $10,
+        listaLimitadoLendario = $11,
+        listaBanido = $12,
+        encerrado = $13,
+        prizes = $14,
+        monotype = $15,
+        dateEnd = COALESCE($16, dateEnd)
+      WHERE id = $17
+    `;
+
+    const values = [
+      titulo,
+      titulo2 || '',
+      gen,
+      sprites,
+      qtdEscolha || null,
+      qtdLimitado,
+      qtdLimitadoLendario || null,
+      hook || '',
+      enviarDiscord || false,
+      listaLimitado || [],
+      listaLimitadoLendario || [],
+      listaBanido || [],
+      encerrado || false,
+      prizes || false,
+      monotype || false,
+      dateEnd || null,
+      tournamentId
+    ];
+
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
     }
 
-    conn.query(query, [user], (err, results) => {
-      conn.release();
-
-      if (err) {
-        console.error('Erro ao consultar usuário no banco:', err);
-        return res.status(500).json({ error: 'Erro ao consultar usuário no banco de dados.' });
-      }
-
-      if (results.length === 0) {
-        return res.status(401).json({ error: 'Usuário incorreto.' });
-      }
-
-      const storedPassword = results[0].password;
-
-      if (password === storedPassword) {
-        return res.status(200).json({ success: true });
-      } else {
-        return res.status(401).json({ error: 'Senha incorreta.' });
-      }
-    });
-  });
+    return res.status(200).json({ message: 'Configurações do torneio atualizadas com sucesso!' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao atualizar o torneio.' });
+  }
 });
 
-app.get('/getTrainers', (req, res) => {
-  const query = 'SELECT * FROM trainers';
 
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
-    }
+app.post('/login', async (req, res) => {
+  const { user, password } = req.body;
+  if (!user || !password) return res.status(400).json({ error: 'Usuário e senha obrigatórios.' });
 
-    conn.query(query, (err, results) => {
-      conn.release();
+  try {
+    const result = await pool.query('SELECT * FROM usuarios WHERE "user"=$1 LIMIT 1', [user]);
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Usuário incorreto.' });
 
-      if (err) {
-        console.error('Erro ao consultar dados no banco:', err);
-        return res.status(500).json({ error: 'Erro ao consultar dados no banco de dados.' });
-      }
+    const storedPassword = result.rows[0].password;
+    if (password === storedPassword) return res.status(200).json({ success: true });
+    return res.status(401).json({ error: 'Senha incorreta.' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao consultar usuário.' });
+  }
+});
 
-      const trainers = results.map(trainer => {
-        let pokemonList = [];
+
+app.get('/getTrainers', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM v_trainers ORDER BY player_id');
+    const trainers = result.rows.map(trainer => {
+      let pokemonList = [];
+
+      if (Array.isArray(trainer.pokemon_list)) {
+        pokemonList = trainer.pokemon_list;
+      } else if (typeof trainer.pokemon_list === 'string') {
         try {
           pokemonList = JSON.parse(trainer.pokemon_list);
-        } catch (parseErr) {
-          console.error('Erro ao analisar lista de Pokémon:', parseErr);
+        } catch {
+          pokemonList = trainer.pokemon_list.replace(/[{}]/g, '').split(',').filter(Boolean);
         }
-        return {
-          id: trainer.id,
-          name: trainer.name,
-          email: trainer.email,
-          pokemonList: pokemonList,
-        };
+      }
+
+      return {
+        id: trainer.player_id,
+        name: trainer.name,
+        email: trainer.email,
+        tournamentId: trainer.tournament_id,
+        tournamentName: trainer.tournament_name,
+        pokemonList
+      };
+    });
+
+    return res.status(200).json(trainers);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao consultar jogadores.' });
+  }
+});
+
+
+
+app.delete('/deleteTrainers/:trainerId', async (req, res) => {
+  const { trainerId } = req.params;
+  const { tournamentsId } = req.body;
+
+  try {
+    if (!tournamentsId) {
+      return res.status(400).json({ error: 'O campo tournamentsId é obrigatório.' });
+    }
+
+    if (trainerId === 'all') {
+      const result = await pool.query(
+        'DELETE FROM participants WHERE tournaments_id = $1',
+        [tournamentsId]
+      );
+      return res.status(200).json({
+        message: `${result.rowCount} participante(s) deletado(s) do torneio ${tournamentsId}.`
       });
+    }
 
-      return res.status(200).json(trainers);
+    const idNum = parseInt(trainerId, 10);
+    if (isNaN(idNum)) {
+      return res.status(400).json({ error: 'ID de treinador inválido.' });
+    }
+
+    const result = await pool.query(
+      'DELETE FROM participants WHERE tournaments_id = $1 AND players_id = $2',
+      [tournamentsId, idNum]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: `Treinador ${idNum} não encontrado no torneio ${tournamentsId}.`
+      });
+    }
+
+    return res.status(200).json({
+      message: `Treinador ${idNum} deletado com sucesso do torneio ${tournamentsId}.`
     });
-  });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao deletar participante.' });
+  }
 });
 
-app.delete('/deleteTrainers/:id', (req, res) => {
-  const trainerId = req.params.id;
 
-  let query = '';
-  let queryParams = [];
+app.post('/submitPrizes', async (req, res) => {
+  const { id, nome, codigo, playerId, pokemonList } = req.body;
 
-  if (trainerId === 'all') {
-    query = 'DELETE FROM trainers';
-  } else {
-    const idAsNumber = parseInt(trainerId, 10);
+  // validações iniciais
+  if (!nome || !codigo || !Array.isArray(pokemonList) || pokemonList.length === 0)
+    return res.status(400).json({ error: 'Campos obrigatórios faltando ou lista de Pokémon vazia.' });
 
-    if (isNaN(idAsNumber)) {
-      return res.status(400).json({ error: 'ID de treinador inválido. Use um número ou "all".' });
+  if (!playerId)
+    return res.status(400).json({ error: 'playerId é obrigatório.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // ✅ checa se o jogador existe
+    const { rows: playerExists } = await client.query(
+      'SELECT id FROM players WHERE id=$1',
+      [playerId]
+    );
+    if (playerExists.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Jogador com ID ${playerId} não encontrado.` });
     }
 
-    query = 'DELETE FROM trainers WHERE id = ?';
-    queryParams = [idAsNumber];
-  }
+    // valida se os IDs de pokémon existem no banco
+    const pokeIds = pokemonList.map(p => p.id);
+    const pokeQuery = `
+      SELECT id, af FROM pokemons WHERE id = ANY($1)
+    `;
+    const { rows: existingPokemons } = await client.query(pokeQuery, [pokeIds]);
 
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
+    // checa se todos foram encontrados
+    const foundIds = existingPokemons.map(p => p.id);
+    const missing = pokeIds.filter(id => !foundIds.includes(id));
+    if (missing.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Pokémons não encontrados: ${missing.join(', ')}` });
     }
 
-    conn.query(query, queryParams, (err, result) => {
-      conn.release();
-
-      if (err) {
-        console.error('Erro ao deletar dados no banco:', err);
-        return res.status(500).json({ error: 'Erro ao deletar dados no banco de dados.' });
-      }
-
-      if (result.affectedRows === 0 && trainerId !== 'all') {
-        return res.status(404).json({ message: `Treinador com ID ${trainerId} não encontrado.` });
-      }
-
-      if (trainerId === 'all') {
-        return res.status(200).json({ message: `${result.affectedRows} treinador(es) deletado(s).` });
-      } else {
-        return res.status(200).json({ message: `Treinador com ID ${trainerId} deletado com sucesso.` });
-      }
-    });
-  });
-});
-
-app.post('/submitPrizes', (req, res) => {
-  const { id, nome, codigo, pokemonList } = req.body;
-
-  if (!nome || !codigo || !pokemonList) {
-    return res.status(400).json({ error: 'Dados inválidos. Certifique-se de preencher todos os campos obrigatórios.' });
-  }
-
-  const pokemonListStr = JSON.stringify(pokemonList);
-
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
-    }
+    let prizeId = id;
 
     if (id) {
+      // update no prêmio existente
       const updateQuery = `
-        UPDATE prizes 
-        SET nome = ?, codigo = ?, pokemon_list = ? 
-        WHERE id = ?
+        UPDATE prizes_config
+        SET nome=$1, codigo=$2, player_id=$3
+        WHERE id=$4
+        RETURNING id
       `;
-      const values = [nome, codigo, pokemonListStr, id];
-
-      conn.query(updateQuery, values, (err, results) => {
-        conn.release();
-
-        if (err) {
-          if (err.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({
-              error: 'O nome ou código já existe em outro registro. Verifique os dados e tente novamente.',
-            });
-          }
-          console.error('Erro ao atualizar prêmio:', err);
-          return res.status(500).json({ error: 'Erro ao atualizar o prêmio no banco de dados.' });
-        }
-
-        if (results.affectedRows === 0) {
-          return res.status(404).json({ error: 'Prêmio com o ID fornecido não encontrado.' });
-        }
-
-        return res.status(200).json({ message: 'Prêmio atualizado com sucesso!' });
-      });
-    } else {
-      const insertQuery = `
-        INSERT INTO prizes (nome, codigo, pokemon_list) 
-        VALUES (?, ?, ?)
-      `;
-      const values = [nome, codigo, pokemonListStr];
-
-      conn.query(insertQuery, values, (err, results) => {
-        conn.release();
-
-        if (err) {
-          if (err.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({
-              error: 'O nome ou código já existe. Verifique os dados e tente novamente.',
-            });
-          }
-          console.error('Erro ao inserir prêmio:', err);
-          return res.status(500).json({ error: 'Erro ao inserir o prêmio no banco de dados.' });
-        }
-
-        return res.status(201).json({ message: 'Prêmio criado com sucesso!', id: results.insertId });
-      });
-    }
-  });
-});
-
-app.get('/getPrizes', (req, res) => {
-  const { codigo } = req.query; // Obter o parâmetro 'codigo' da requisição
-  const query = codigo
-      ? 'SELECT * FROM prizes WHERE codigo = ?'
-      : 'SELECT * FROM prizes';
-
-  connection.getConnection((err, conn) => {
-    if (err) {
-      console.error('Erro ao obter conexão do pool:', err);
-      return res.status(500).json({ error: 'Erro ao conectar ao banco de dados.' });
-    }
-
-    conn.query(query, codigo ? [codigo] : [], (err, results) => {
-      conn.release();
-
-      if (err) {
-        console.error('Erro ao consultar prêmios no banco:', err);
-        return res.status(500).json({ error: 'Erro ao consultar prêmios no banco de dados.' });
+      const result = await client.query(updateQuery, [nome, codigo, playerId, id]);
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Prêmio não encontrado.' });
       }
 
-      const prizes = results.map(prize => ({
-        id: prize.id,
-        nome: prize.nome,
-        codigo: prize.codigo,
-        pokemonList: JSON.parse(prize.pokemon_list || '[]'),
-      }));
+      // apaga lista antiga antes de recriar
+      await client.query('DELETE FROM prizes_list WHERE prizes_id=$1', [id]);
+    } else {
+      // cria novo prêmio
+      const insertQuery = `
+        INSERT INTO prizes_config (nome, codigo, player_id)
+        VALUES ($1, $2, $3)
+        RETURNING id
+      `;
+      const result = await client.query(insertQuery, [nome, codigo, playerId]);
+      prizeId = result.rows[0].id;
+    }
 
-      return res.status(200).json(prizes);
+    // insere nova lista de pokémons vinculada ao prêmio
+    for (const p of pokemonList) {
+      const pk = existingPokemons.find(e => e.id === p.id);
+      await client.query(
+        `
+          INSERT INTO prizes_list (prizes_id, pokemons_id, pokemons_af)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (prizes_id, pokemons_id, pokemons_af) DO NOTHING
+        `,
+        [prizeId, p.id, p.af ?? pk.af ?? '']
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(id ? 200 : 201).json({
+      message: id ? 'Prêmio atualizado com sucesso!' : 'Prêmio criado com sucesso!',
+      id: prizeId
     });
-  });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+
+    if (err.code === '23505')
+      return res.status(400).json({ error: 'Nome ou código já existe.' });
+
+    return res.status(500).json({ error: 'Erro ao salvar prêmio.' });
+  } finally {
+    client.release();
+  }
 });
 
 
 
+app.get('/getPrizes', async (req, res) => {
+  const { codigo } = req.query;
+  let query = 'SELECT * FROM v_prizes';
+  let params = [];
+  if (codigo) { query += ' WHERE prize_code=$1'; params.push(codigo); }
+
+  try {
+    const result = await pool.query(query, params);
+    const prizes = result.rows.map(prize => ({
+      id: prize.prize_id,
+      nome: prize.prize_name,
+      codigo: prize.prize_code,
+    }));
+    return res.status(200).json(prizes);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao consultar prêmios.' });
+  }
+});
 
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Servidor rodando na porta ${port}`);
-});
+app.listen(port, () => console.log(`Servidor rodando na porta ${port}`));
