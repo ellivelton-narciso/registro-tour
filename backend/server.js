@@ -361,7 +361,6 @@ app.delete('/deleteTrainers/:trainerId', async (req, res) => {
 app.post('/submitPrizes', async (req, res) => {
   const { id, nome, codigo, playerId, pokemonList } = req.body;
 
-  // validações iniciais
   if (!nome || !codigo || !Array.isArray(pokemonList) || pokemonList.length === 0)
     return res.status(400).json({ error: 'Campos obrigatórios faltando ou lista de Pokémon vazia.' });
 
@@ -372,7 +371,6 @@ app.post('/submitPrizes', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // ✅ checa se o jogador existe
     const { rows: playerExists } = await client.query(
       'SELECT id FROM players WHERE id=$1',
       [playerId]
@@ -382,14 +380,12 @@ app.post('/submitPrizes', async (req, res) => {
       return res.status(400).json({ error: `Jogador com ID ${playerId} não encontrado.` });
     }
 
-    // valida se os IDs de pokémon existem no banco
     const pokeIds = pokemonList.map(p => p.id);
     const pokeQuery = `
       SELECT id, af FROM pokemons WHERE id = ANY($1)
     `;
     const { rows: existingPokemons } = await client.query(pokeQuery, [pokeIds]);
 
-    // checa se todos foram encontrados
     const foundIds = existingPokemons.map(p => p.id);
     const missing = pokeIds.filter(id => !foundIds.includes(id));
     if (missing.length > 0) {
@@ -400,7 +396,6 @@ app.post('/submitPrizes', async (req, res) => {
     let prizeId = id;
 
     if (id) {
-      // update no prêmio existente
       const updateQuery = `
         UPDATE prizes_config
         SET nome=$1, codigo=$2, player_id=$3
@@ -413,10 +408,8 @@ app.post('/submitPrizes', async (req, res) => {
         return res.status(404).json({ error: 'Prêmio não encontrado.' });
       }
 
-      // apaga lista antiga antes de recriar
       await client.query('DELETE FROM prizes_list WHERE prizes_id=$1', [id]);
     } else {
-      // cria novo prêmio
       const insertQuery = `
         INSERT INTO prizes_config (nome, codigo, player_id)
         VALUES ($1, $2, $3)
@@ -426,7 +419,6 @@ app.post('/submitPrizes', async (req, res) => {
       prizeId = result.rows[0].id;
     }
 
-    // insere nova lista de pokémons vinculada ao prêmio
     for (const p of pokemonList) {
       const pk = existingPokemons.find(e => e.id === p.id);
       await client.query(
@@ -460,7 +452,6 @@ app.post('/submitPrizes', async (req, res) => {
 });
 
 
-
 app.get('/getPrizes', async (req, res) => {
   const { codigo } = req.query;
   let query = 'SELECT * FROM v_prizes';
@@ -480,6 +471,40 @@ app.get('/getPrizes', async (req, res) => {
     return res.status(500).json({ error: 'Erro ao consultar prêmios.' });
   }
 });
+
+app.get('/pokemons', async (req, res) => {
+  try {
+    const gen = req.query.gen ? parseInt(req.query.gen, 10) : null;
+
+    if (gen !== null && isNaN(gen)) {
+      return res.status(400).json({ error: 'Parâmetro gen inválido.' });
+    }
+
+    let query = 'SELECT id, name, type, gen, af FROM pokemons';
+    const values = [];
+
+    if (gen !== null) {
+      query += ' WHERE gen = $1';
+      values.push(gen);
+    }
+
+    query += ' ORDER BY id';
+
+    const result = await pool.query(query, values);
+
+    const pokemons = result.rows.map(p => ({
+      ...p,
+      type: Array.isArray(p.type) ? p.type : JSON.parse(p.type || '[]')
+    }));
+
+    return res.status(200).json(pokemons);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao buscar Pokémon.' });
+  }
+});
+
+
 
 
 const port = process.env.PORT || 3000;
