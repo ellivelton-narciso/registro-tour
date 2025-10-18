@@ -14,8 +14,9 @@ CREATE TABLE config (
 CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
     "user" VARCHAR(255) NOT NULL UNIQUE,
-    email VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) DEFAULT NULL UNIQUE,
     "password" VARCHAR(255) NOT NULL,
+    admin INT DEFAULT 0 NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(), 
     last_login TIMESTAMP 
 );
@@ -118,7 +119,8 @@ CREATE TABLE IF NOT EXISTS shop_items (
     id SERIAL PRIMARY KEY,
     pokemon_name VARCHAR(50) NOT NULL,
     price INT NOT NULL,
-    sold BOOLEAN DEFAULT FALSE
+    sold BOOLEAN DEFAULT FALSE,
+    generation int4 NOT NULL
 );
 
 
@@ -126,7 +128,8 @@ CREATE TABLE IF NOT EXISTS shop_transactions (
     id SERIAL PRIMARY KEY,
     player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     item_id INT NOT NULL REFERENCES shop_items(id) ON DELETE CASCADE,
-    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    delivered boolean NOT NULL DEFAULT false
 );
 
 
