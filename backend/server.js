@@ -45,20 +45,43 @@ app.post('/submit', async (req, res) => {
       return res.status(400).json({ error: 'Jogador já cadastrado neste torneio.' });
     }
 
+    const tournamentResult = await client.query(
+      'SELECT paymentregister FROM tournaments WHERE id = $1',
+      [tournamentId]
+    );
+    if (tournamentResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Torneio não encontrado.' });
+    }
+    const tournament = tournamentResult.rows[0];
+
+    if (player.coins < tournament.paymentregister) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Saldo insuficiente.' });
+    }
+
+    await client.query(
+      'UPDATE players SET coins = coins - $1 WHERE id = $2',
+      [tournament.paymentregister, player.id]
+    );
+
     const participantInsert = await client.query(
       'INSERT INTO participants (tournaments_id, players_id) VALUES ($1, $2) RETURNING id',
       [tournamentId, player.id]
     );
     const participantId = participantInsert.rows[0].id;
 
+    const values = [];
+    const conditions = pokemonList.map((p, i) => {
+      values.push(p.id, p.af);
+      return `($${values.length-1}, $${values.length})`;
+    }).join(',');
+
     const pokemonsResult = await client.query(
-      'SELECT id, name FROM pokemons WHERE name = ANY($1::text[])',
-      [pokemonList]
+      `SELECT id, name, af FROM pokemons WHERE (id, af) IN (${conditions})`,
+      values
     );
-    if (pokemonsResult.rows.length !== pokemonList.length) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Um ou mais Pokémon não encontrados.' });
-    }
+
 
     for (const poke of pokemonsResult.rows) {
       await client.query(
@@ -114,7 +137,8 @@ app.post('/createTournament', async (req, res) => {
     listaBanido,
     encerrado,
     prizes,
-    monotype
+    monotype,
+    paymentRegister
   } = req.body;
 
   // Validação básica
@@ -139,9 +163,10 @@ app.post('/createTournament', async (req, res) => {
         listaBanido,
         encerrado,
         prizes,
-        monotype
+        monotype,
+        paymentRegister
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
       )
       RETURNING id
     `;
@@ -161,7 +186,8 @@ app.post('/createTournament', async (req, res) => {
       listaBanido || [],
       encerrado || false,
       prizes || false,
-      monotype || false
+      monotype || false,
+      paymentRegister || 50
     ];
 
     const result = await pool.query(query, values);
@@ -197,6 +223,7 @@ app.post('/updateConfig', async (req, res) => {
     encerrado,
     prizes,
     monotype,
+    paymentRegister,
     dateEnd
   } = req.body;
 
@@ -222,8 +249,9 @@ app.post('/updateConfig', async (req, res) => {
         encerrado = $13,
         prizes = $14,
         monotype = $15,
-        dateEnd = COALESCE($16, dateEnd)
-      WHERE id = $17
+        paymentRegister = $16,
+        dateEnd = COALESCE($17, dateEnd)
+      WHERE id = $18
     `;
 
     const values = [
@@ -242,6 +270,7 @@ app.post('/updateConfig', async (req, res) => {
       encerrado || false,
       prizes || false,
       monotype || false,
+      paymentRegister || 50,
       dateEnd || null,
       tournamentId
     ];
