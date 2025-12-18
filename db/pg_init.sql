@@ -295,36 +295,64 @@ SELECT
     p.email,
     tr.id AS tournament_id,
     tr.name AS tournament_name,
-    ARRAY_AGG(pk.name ORDER BY pk.name) AS pokemon_list
+    array_agg(pk.name ORDER BY pk.name) AS pokemon_list
 FROM participants pa
 JOIN players p ON pa.players_id = p.id
 JOIN tournaments tr ON pa.tournaments_id = tr.id
-LEFT JOIN choices c ON c.participants_id = pa.id
-LEFT JOIN pokemons pk ON pk.id = c.pokemons_id
-WHERE tr.dateEnd IS NULL
+LEFT JOIN choices c 
+    ON c.participants_id = pa.id
+   AND c.tournaments_id = tr.id
+LEFT JOIN pokemons pk
+    ON pk.id = c.pokemons_id
+   AND (pk.af = c.pokemons_af OR (c.pokemons_af IS NULL AND (pk.af IS NULL OR pk.af = '')))
+WHERE tr.dateend IS NULL
 GROUP BY p.id, p.name, p.email, tr.id, tr.name;
 
 
 --  VIEW: CONFIG (DADOS DO ÚLTIMO TORNEIO)
 
-CREATE OR REPLACE VIEW v_config AS
-SELECT
-    id,
-    name AS titulo,
-    titulo2,
-    gen,
-    sprites,
-    qtdLimitado,
-    qtdLimitadoLendario,
-    listaLimitado,
-    listaLimitadoLendario,
-    listaBanido,
-    hook,
-    enviarDiscord,
-    qtdEscolha,
-    encerrado,
-    prizes,
-    monotype
-FROM tournaments
-ORDER BY dateStart DESC, id DESC
-LIMIT 1;
+CREATE OR REPLACE VIEW v_config
+AS SELECT tournaments.id,
+    tournaments.name AS titulo,
+    tournaments.titulo2,
+    tournaments.gen,
+    tournaments.sprites,
+    tournaments.qtdlimitado,
+    tournaments.qtdlimitadolendario,
+    tournaments.listalimitado,
+    tournaments.listalimitadolendario,
+    tournaments.listabanido,
+    tournaments.hook,
+    tournaments.enviardiscord,
+    tournaments.qtdescolha,
+    tournaments.encerrado,
+    tournaments.prizes,
+    tournaments.monotype,
+    tournaments.paymentregister
+   FROM tournaments
+  ORDER BY tournaments.datestart DESC, tournaments.id DESC
+ LIMIT 1;
+
+CREATE VIEW v_player_stats AS
+SELECT 
+    p.id AS player_id,
+    SUM(
+        CASE 
+            WHEN (m.player_a_id = p.id AND m.winner = 'A')
+              OR (m.player_b_id = p.id AND m.winner = 'B')
+            THEN 1 ELSE 0 
+        END
+    ) AS wins,
+    SUM(
+        CASE 
+            WHEN (m.player_a_id = p.id AND m.winner = 'B')
+              OR (m.player_b_id = p.id AND m.winner = 'A')
+            THEN 1 ELSE 0 
+        END
+    ) AS losses
+FROM 
+    players p
+LEFT JOIN 
+    matches m ON m.player_a_id = p.id OR m.player_b_id = p.id
+GROUP BY 
+    p.id;
