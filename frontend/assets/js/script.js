@@ -89,18 +89,24 @@ $(document).ready(function () {
 
     const bannedList = window.config?.listabanido?.map(p => p.toLowerCase()) || [];
 
-    const filtered = selectedType
-      ? allPokes.filter(p => {
-        const data = Array.isArray(p) ? p[0] : p;
-         if (!data.name || bannedList.includes(data.name.toLowerCase())) return false;
-        return data.type && data.type.includes(selectedType);
-      })
-      : allPokes;
-
-    filtered.forEach(p => {
+    allPokes.forEach(p => {
       if (Array.isArray(p)) {
-        p.forEach(pd => $('#pokemon-list').append(new Option(pd.name, pd.name)));
+        const formasFiltradas = p.filter(pd => {
+          if (!pd.name) return false;
+          if (bannedList.includes(pd.name.toLowerCase())) return false;
+          if (!selectedType) return true;
+          return pd.type && pd.type.includes(selectedType);
+        });
+
+        formasFiltradas.forEach(pd => {
+          $('#pokemon-list').append(new Option(pd.name, pd.name));
+        });
+
       } else {
+        if (!p.name) return;
+        if (bannedList.includes(p.name.toLowerCase())) return;
+        if (selectedType && (!p.type || !p.type.includes(selectedType))) return;
+
         $('#pokemon-list').append(new Option(p.name, p.name));
       }
     });
@@ -110,6 +116,8 @@ $(document).ready(function () {
       allowClear: true
     });
   }
+
+
 
   fetch(`${urlBE}/getConfig`)
   .then(res => res.json())
