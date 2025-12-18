@@ -110,6 +110,12 @@
         </div>
 
         <div class="mb-3">
+            <label for="payment-register" class="form-label">Valor de Inscrição</label>
+            <input type="number" id="payment-register" class="form-control" min="0" max="100" step="1" placeholder="Valor da inscrição" >
+        </div>
+
+
+        <div class="mb-3">
             <label for="webhook" class="form-label">Webhook Discord</label>
             <input type="url" id="webhook" name="webhook" class="form-control" placeholder="URL do webhook do Discord">
         </div>
@@ -130,8 +136,15 @@
         </div>
 
 
+        <div class="d-grid gap-2 mt-4">
+            <button type="submit" class="btn btn-success" id="submitConfig">
+                Salvar Configurações
+            </button>
 
-        <button type="submit" class="btn btn-primary w-100" id="submitConfig">Salvar Configurações</button>
+            <button type="button" class="btn btn-warning" id="createTournament">
+                Criar Novo Torneio
+            </button>
+        </div>
     </form>
 </div>
 

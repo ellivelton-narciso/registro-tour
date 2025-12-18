@@ -1,5 +1,17 @@
 document.addEventListener('DOMContentLoaded', function () {
     const urlBE = localStorage.getItem('urlBE')
+    let currentTournamentId = null; 
+
+   fetch(`${urlBE}/getConfig`)
+    .then(res => res.json())
+    .then(async config => {
+        if (config.error) {
+            Swal.fire({ icon: 'error', title: 'Erro ao carregar configurações', text: config.error });
+            return;
+        }
+        currentTournamentId = config.id;
+    });
+
     function getTrainers() {
         fetch(`${urlBE}/getTrainers`)
             .then(response => response.json())
@@ -74,6 +86,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                body: JSON.stringify({ tournamentsId: currentTournamentId })
             });
 
             const result = await response.json();

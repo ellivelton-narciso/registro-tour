@@ -1,6 +1,7 @@
 $(document).ready(function () {
 
     const apiUrl = localStorage.getItem('urlBE');
+    let currentTournamentId = null;
     let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen, allPokes = [];
     const lendariosBanidos = [];
 
@@ -85,21 +86,24 @@ $(document).ready(function () {
                 $('#titulo2').val(data.titulo2 || '');
                 $('#generation').val(data.gen || '1').change();
                 $('#game-sprites').val(data.sprites || 'red-green').change();
-                $('#limitados-limit').val(data.qtdLimitado || 2);
-                $('#legendary-limit').val(data.qtdLimitadoLendario || 2);
+                $('#limitados-limit').val(data.qtdlimitado);
+                $('#legendary-limit').val(data.qtdlimitadolendario);
                 $('#webhook').val(data.hook || '');
-                $('#notifications-enabled').prop('checked', data.enviarDiscord === 1);
-                $('#prizes-enabled').prop('checked', data.prizes === 1);
-                $('#panel-enabled').prop('checked', data.encerrado === 0);
-                $('#monotype-enabled').prop('checked', data.monotype === 1);
-                $('#escolha-limit').val(data.qtdEscolha || 10);
+                $('#notifications-enabled').prop('checked', data.enviardiscord === true);
+                $('#prizes-enabled').prop('checked', data.prizes === true);
+                $('#panel-enabled').prop('checked', data.encerrado === false);
+                $('#monotype-enabled').prop('checked', data.monotype === true);
+                $('#escolha-limit').val(data.qtdescolha || 10);
+                $('#payment-register').val(data.paymentregister ?? 50);
+
 
                 const gen = parseInt(data.gen || 1);
+                currentTournamentId = data.id;
                 await carregarGens(gen);
 
-                $('#limitados-list').val(data.listaLimitado || []).trigger('change');
-                $('#legendary-list').val(data.listaLimitadoLendario || []).trigger('change');
-                $('#ban-list').val(data.listaBanido || []).trigger('change');
+                $('#limitados-list').val(data.listalimitado || []).trigger('change');
+                $('#legendary-list').val(data.listalimitadolendario || []).trigger('change');
+                $('#ban-list').val(data.listabanido || []).trigger('change');
             },
             error: function () {
                 Swal.fire({
@@ -134,12 +138,15 @@ $(document).ready(function () {
         const listaBanido = $('#ban-list').val() || [];
         const qtdEscolha = $('#escolha-limit').val();
         const monotype = $('#monotype-enabled').prop('checked') ? 1 : 0;
+        const paymentRegister = $('#payment-register').val();
+
 
         $.ajax({
             url: `${apiUrl}/updateConfig`,
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify({
+                tournamentId: currentTournamentId,
                 titulo,
                 titulo2,
                 gen,
@@ -154,7 +161,8 @@ $(document).ready(function () {
                 listaBanido,
                 qtdEscolha,
                 prizes,
-                monotype
+                monotype,
+                paymentRegister
             }),
             success: function () {
                 Swal.fire({
@@ -172,6 +180,61 @@ $(document).ready(function () {
             }
         });
     });
+
+    $('#createTournament').on('click', function () {
+    Swal.fire({
+        title: 'Criar novo torneio?',
+        text: 'Isso irá criar um novo torneio com as configurações atuais.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, criar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        const payload = {
+            titulo: $('#titulo').val(),
+            titulo2: $('#titulo2').val(),
+            gen: $('#generation').val(),
+            sprites: $('#game-sprites').val(),
+            qtdLimitado: $('#limitados-limit').val(),
+            qtdLimitadoLendario: $('#legendary-limit').val(),
+            qtdEscolha: $('#escolha-limit').val(),
+            hook: $('#webhook').val(),
+            enviarDiscord: $('#notifications-enabled').prop('checked') ? 1 : 0,
+            listaLimitado: $('#limitados-list').val() || [],
+            listaLimitadoLendario: $('#legendary-list').val() || [],
+            listaBanido: $('#ban-list').val() || [],
+            encerrado: $('#panel-enabled').prop('checked') ? 0 : 1,
+            prizes: $('#prizes-enabled').prop('checked') ? 1 : 0,
+            monotype: $('#monotype-enabled').prop('checked') ? 1 : 0,
+            paymentRegister: 50 
+        };
+
+        $.ajax({
+            url: `${apiUrl}/createTournament`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function (res) {
+                currentTournamentId = res.tournamentId;
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Torneio criado!',
+                    text: `Torneio criado com ID ${res.tournamentId}`
+                });
+            },
+            error: function (err) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: err.responseJSON?.error || 'Erro ao criar o torneio.'
+                });
+            }
+        });
+    });
+});
+
 
     loadConfig();
 });
