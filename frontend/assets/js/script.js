@@ -194,7 +194,7 @@ $(document).ready(function () {
       renderPokemonList(tipo);
     });
 
-    const tipoSelecionado = $('#monotype-list').val();
+    const tipoSelecionado = config.monotype ? $('#monotype-list').val() : null;
     renderPokemonList(tipoSelecionado);
   })
   .catch(err => {
