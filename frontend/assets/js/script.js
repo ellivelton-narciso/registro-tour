@@ -5,6 +5,8 @@ $(document).ready(function () {
   let sprites;
   let qtdEscolha;
   let tournamentId;
+  let discordURL;
+  let enviardiscord = false;
   const urlBE = localStorage.getItem('urlBE');
 
   function debounce(func, delay) {
@@ -141,6 +143,11 @@ $(document).ready(function () {
       $('#monotype-list').select2({ placeholder: 'Escolha seu tipo', multiple: false });
     }
 
+    if (config.enviardiscord) {
+      enviardiscord = config.enviardiscord
+      discordURL = config.hook;
+    }
+
     tournamentId = config.id;
     sprites = config.sprites ?? 'emerald';
     qtdEscolha = config.qtdescolha ?? 10;
@@ -250,6 +257,13 @@ $('#simpleForm').on('submit', function (event) {
           if (data.message) {
             Swal.fire({ icon: 'success', title: 'Formulário Enviado', text: data.message });
             $('#name').val(''); $('#email').val(''); $('#pokemon-list').val([]).trigger('change');
+            if (enviardiscord) {
+              fetch(discordURL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: `Novo registro: ${name}` })
+              })
+            }
           } else {
             Swal.fire({ icon: 'error', title: 'Erro no Envio', text: data.error || 'Algo deu errado.' });
           }
