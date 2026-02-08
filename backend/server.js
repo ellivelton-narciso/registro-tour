@@ -3,6 +3,8 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const axios = require('axios');
 const pool = require('./db/connection');
+const auth = require('./authMiddleware');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
@@ -120,8 +122,7 @@ app.get('/getConfig', async (req, res) => {
   }
 });
 
-
-app.post('/createTournament', async (req, res) => {
+app.post('/createTournament', auth, async (req, res) => {
   const {
     titulo,
     titulo2,
@@ -204,8 +205,7 @@ app.post('/createTournament', async (req, res) => {
   }
 });
 
-
-app.post('/updateConfig', async (req, res) => {
+app.post('/updateConfig', auth, async (req, res) => {
   const {
     tournamentId,
     titulo,
@@ -288,26 +288,64 @@ app.post('/updateConfig', async (req, res) => {
   }
 });
 
-
 app.post('/login', async (req, res) => {
   const { user, password } = req.body;
-  if (!user || !password) return res.status(400).json({ error: 'Usuário e senha obrigatórios.' });
+
+  if (!user || !password) {
+    return res.status(400).json({ error: 'Usuário e senha obrigatórios.' });
+  }
 
   try {
-    const result = await pool.query('SELECT * FROM usuarios WHERE "user"=$1 LIMIT 1', [user]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Usuário incorreto.' });
+    const result = await pool.query(
+      'SELECT * FROM usuarios WHERE "user" = $1 LIMIT 1',
+      [user]
+    );
 
-    const storedPassword = result.rows[0].password;
-    if (password === storedPassword) return res.status(200).json({ success: true });
-    return res.status(401).json({ error: 'Senha incorreta.' });
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
+    }
+
+    const usuario = result.rows[0];
+
+    if (password !== usuario.password) {
+      return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
+    }
+
+    const token = jwt.sign(
+      {
+        id: usuario.id,
+        user: usuario.user,
+        admin: usuario.admin
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '36h' }
+    );
+
+    await pool.query(
+      `
+      INSERT INTO tokens (usuarios_id, token)
+      VALUES ($1, $2)
+      `,
+      [usuario.id, token]
+    );
+
+    await pool.query(
+      'UPDATE usuarios SET last_login = NOW() WHERE id = $1',
+      [usuario.id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      token
+    });
+
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Erro ao consultar usuário.' });
+    return res.status(500).json({ error: 'Erro interno no login.' });
   }
 });
 
-
-app.get('/getTrainers', async (req, res) => {
+app.get('/getTrainers', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM v_trainers ORDER BY player_id');
     const trainers = result.rows.map(trainer => {
@@ -341,8 +379,7 @@ app.get('/getTrainers', async (req, res) => {
 });
 
 
-
-app.delete('/deleteTrainers/:trainerId', async (req, res) => {
+app.delete('/deleteTrainers/:trainerId', auth, async (req, res) => {
   const { trainerId } = req.params;
   const { tournamentsId } = req.body;
 
@@ -386,8 +423,7 @@ app.delete('/deleteTrainers/:trainerId', async (req, res) => {
   }
 });
 
-
-app.post('/submitPrizes', async (req, res) => {
+app.post('/submitPrizes', auth, async (req, res) => {
   const { id, nome, codigo, playerId, pokemonList } = req.body;
 
   if (!nome || !codigo || !Array.isArray(pokemonList) || pokemonList.length === 0)
@@ -480,8 +516,7 @@ app.post('/submitPrizes', async (req, res) => {
   }
 });
 
-
-app.get('/getPrizes', async (req, res) => {
+app.get('/getPrizes', auth, async (req, res) => {
   const { codigo } = req.query;
   let query = 'SELECT * FROM v_prizes';
   let params = [];
