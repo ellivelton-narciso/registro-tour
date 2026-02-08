@@ -1,4 +1,22 @@
 $(document).ready(async function () {
+
+    function authHeaders() {
+        return {
+            'Authorization': `Bearer ${sessionStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+        };
+    }
+
+    function handleUnauthorized(response) {
+        if (response.status === 401) {
+            sessionStorage.removeItem('token');
+            window.location.href = 'login.html';
+            return true;
+        }
+        return false;
+    }
+
+
     let allPokes = [];
     const urlBE = localStorage.getItem('urlBE'); // URL do backend
     let premioTable;
@@ -37,7 +55,10 @@ $(document).ready(async function () {
 
     async function carregarPrizes() {
         try {
-            const response = await fetch(`${urlBE}/getPrizes`);
+            const response = await fetch(`${urlBE}/getPrizes`, {
+                headers: authHeaders()
+            });
+            if (handleUnauthorized(response)) return;
             const prizes = await response.json();
 
             premioTable.clear();
@@ -111,7 +132,7 @@ $(document).ready(async function () {
         try {
             const response = await fetch(`${urlBE}/submitPrizes`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(),
                 body: JSON.stringify({ id, nome, codigo, pokemonList }),
             });
 
@@ -134,7 +155,10 @@ $(document).ready(async function () {
 
     $('#premioTable').on('click', '.editPrize', async function () {
         const id = $(this).data('id');
-        const response = await fetch(`${urlBE}/getPrizes`);
+        const response = await fetch(`${urlBE}/getPrizes`, {
+            headers: authHeaders()
+        });
+        if (handleUnauthorized(response)) return;
         const prizes = await response.json();
         const prize = prizes.find(p => p.id == id);
         abrirModal(true, prize);

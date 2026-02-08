@@ -2,6 +2,23 @@ document.addEventListener('DOMContentLoaded', function () {
     const urlBE = localStorage.getItem('urlBE')
     let currentTournamentId = null; 
 
+    function authHeaders() {
+        return {
+            'Authorization': `Bearer ${sessionStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+        };
+    }
+
+    function handleUnauthorized(response) {
+        if (response.status === 401) {
+            sessionStorage.removeItem('token');
+            window.location.href = 'login.html';
+            return true;
+        }
+        return false;
+    }
+
+
    fetch(`${urlBE}/getConfig`)
     .then(res => res.json())
     .then(async config => {
@@ -13,25 +30,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function getTrainers() {
-        fetch(`${urlBE}/getTrainers`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    console.error('Erro ao obter os dados dos treinadores:', data.error);
-                } else {
-                    const qtdRegistros = data.length;
-                    const qtdDiferentes = getUniquePokemonCount(data);
+        fetch(`${urlBE}/getTrainers`, {
+            headers: authHeaders()
+        })
+        .then(response => {
+            if (handleUnauthorized(response)) return;
+            return response.json()
+        })
+        .then(data => {
+            if (!data) return;
+            if (data.error) {
+                console.error('Erro ao obter os dados dos treinadores:', data.error);
+            } else {
+                const qtdRegistros = data.length;
+                const qtdDiferentes = getUniquePokemonCount(data);
 
-                    document.getElementById('qtdRegistros').innerText = qtdRegistros;
-                    document.getElementById('qtdDiferentes').innerText = qtdDiferentes;
+                document.getElementById('qtdRegistros').innerText = qtdRegistros;
+                document.getElementById('qtdDiferentes').innerText = qtdDiferentes;
 
-                    populatePokemonTable(data);
-                    populateRankingTable(data);
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao buscar os treinadores:', error);
-            });
+                populatePokemonTable(data);
+                populateRankingTable(data);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao buscar os treinadores:', error);
+        });
     }
 
     function getUniquePokemonCount(trainers) {
@@ -83,11 +106,11 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch(url, {
                 method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: authHeaders(),
                 body: JSON.stringify({ tournamentsId: currentTournamentId })
             });
+
+            if (handleUnauthorized(response)) return;
 
             const result = await response.json();
 

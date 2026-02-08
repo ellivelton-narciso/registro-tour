@@ -1,5 +1,14 @@
 $(document).ready(function () {
 
+    $.ajaxSetup({
+        beforeSend: function (xhr) {
+            const token = sessionStorage.getItem('token');
+            if (token) {
+                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            }
+        }
+    });
+    
     const apiUrl = localStorage.getItem('urlBE');
     let currentTournamentId = null;
     let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen, allPokes = [];
@@ -237,4 +246,11 @@ $(document).ready(function () {
 
 
     loadConfig();
+});
+
+$(document).ajaxError(function (event, xhr) {
+    if (xhr.status === 401) {
+        sessionStorage.removeItem('token');
+        window.location.href = 'login.html';
+    }
 });

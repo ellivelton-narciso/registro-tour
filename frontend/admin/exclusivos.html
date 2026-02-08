@@ -11,9 +11,11 @@
   <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/2.2.1/css/dataTables.dataTables.min.css">
   <link rel="stylesheet" href="../assets/css/style.css">
   <script>
-    if (localStorage.getItem('logado') !== 'true') {
-      window.location.href = 'login.html';
-    }
+      const token = sessionStorage.getItem('token');
+
+      if (!token) {
+          window.location.href = 'login.html';
+      }
   </script>
 </head>
 <body>

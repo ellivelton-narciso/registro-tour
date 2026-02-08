@@ -10,7 +10,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
     <script>
-        if (localStorage.getItem('logado') !== 'true') {
+        const token = sessionStorage.getItem('token');
+
+        if (!token) {
             window.location.href = 'login.html';
         }
     </script>
