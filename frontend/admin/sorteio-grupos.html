@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <script src="../assets/js/config.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sorteio de Grupos</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <link rel="stylesheet" href="../assets/css/style.css">
+
+  <script>
+    const token = sessionStorage.getItem('token');
+    if (!token) {
+      window.location.href = 'login.html';
+    }
+  </script>
+</head>
+<body>
+  <div id="nav-bar"></div>
+  <script>
+    fetch('nav/nav.html')
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById('nav-bar').innerHTML = data;
+      })
+      .catch(error => console.error('Erro ao carregar o nav:', error));
+  </script>
+
+  <div class="container mt-4 mb-5">
+    <h2 class="text-center mb-4">Sorteio de Grupos (Copa Fácil)</h2>
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label" for="qtdParticipantes">Participantes cadastrados</label>
+              <input id="qtdParticipantes" class="form-control" disabled value="0">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="qtdGrupos">Quantidade de Grupos</label>
+              <input type="number" class="form-control" id="qtdGrupos" min="1" max="26" value="2">
+              <div class="form-text">Até 26 (A-Z).</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="qtdClassificados">Classificados por Grupo</label>
+              <input type="number" class="form-control" id="qtdClassificados" min="1" value="2">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label" for="formatoMataMata">Formato do Mata-Mata</label>
+              <select class="form-select" id="formatoMataMata">
+                <option value="1" selected>MD1 (melhor de 1)</option>
+                <option value="3">MD3 (melhor de 3)</option>
+              </select>
+            </div>
+
+            <div class="d-grid gap-2 mt-4">
+              <button class="btn btn-success" id="saveCupSetup" type="button">Salvar Configuração</button>
+              <button class="btn btn-warning" id="generateCupGroups" type="button">
+                Sortear Grupos e Gerar Fase de Grupos
+              </button>
+            </div>
+
+            <hr>
+            <div class="small text-muted">
+              Ao sortear novamente, o backend vai atualizar `participants.grupo` e recriar `tournament_matches` da fase de grupos.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h4 class="m-0">Distribuição</h4>
+              <button class="btn btn-outline-primary btn-sm" id="refreshParticipants" type="button">Atualizar</button>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-striped align-middle">
+                <thead>
+                  <tr>
+                    <th style="width: 90px;">Grupo</th>
+                    <th>Nome</th>
+                    <th>Email</th>
+                  </tr>
+                </thead>
+                <tbody id="participantsTableBody">
+                </tbody>
+              </table>
+            </div>
+            <div class="text-muted small" id="participantsHint"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="../assets/js/sorteioGrupos.js"></script>
+</body>
+</html>
+

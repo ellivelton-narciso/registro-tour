@@ -288,6 +288,354 @@ app.post('/updateConfig', auth, async (req, res) => {
   }
 });
 
+function parsePositiveInt(value) {
+  const n = typeof value === 'string' ? parseInt(value, 10) : value;
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+function parseFormatoMataMata(value) {
+  // Front envia MD1/MD3 como 1 ou 3.
+  const n = typeof value === 'string' ? parseInt(value, 10) : value;
+  if (n === 1 || n === 3) return n;
+  return null;
+}
+
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+app.get('/getCupSetup', auth, async (req, res) => {
+  const tournamentId = req.query.tournamentId;
+  const id = typeof tournamentId === 'string' ? tournamentId.trim() : tournamentId;
+
+  if (!id) return res.status(400).json({ error: 'tournamentId é obrigatório.' });
+
+  try {
+    const tournamentResult = await pool.query(
+      'SELECT qtdGrupos, qtdClassificados, formatoMataMata FROM tournaments WHERE id = $1',
+      [id]
+    );
+    if (tournamentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    const participantsResult = await pool.query(
+      'SELECT COUNT(*)::int AS qtdParticipantes, COUNT(DISTINCT grupo)::int AS qtdGruposComSorteio FROM participants WHERE tournaments_id = $1',
+      [id]
+    );
+
+    return res.status(200).json({
+      ...tournamentResult.rows[0],
+      ...participantsResult.rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao buscar setup da copa.' });
+  }
+});
+
+app.get('/getTournamentParticipants', auth, async (req, res) => {
+  const tournamentId = req.query.tournamentId;
+  const id = typeof tournamentId === 'string' ? tournamentId.trim() : tournamentId;
+
+  if (!id) return res.status(400).json({ error: 'tournamentId é obrigatório.' });
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        pa.id AS participant_id,
+        p.id AS player_id,
+        p.name,
+        p.email,
+        pa.grupo
+      FROM participants pa
+      JOIN players p ON p.id = pa.players_id
+      WHERE pa.tournaments_id = $1
+      ORDER BY pa.grupo NULLS LAST, p.name
+      `,
+      [id]
+    );
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao listar participantes.' });
+  }
+});
+
+app.post('/updateCupSetup', auth, async (req, res) => {
+  const {
+    tournamentId,
+    qtdGrupos,
+    qtdClassificados,
+    formatoMataMata
+  } = req.body;
+
+  if (!tournamentId) return res.status(400).json({ error: 'tournamentId é obrigatório.' });
+
+  const parsedQtdGrupos = parsePositiveInt(qtdGrupos);
+  const parsedQtdClassificados = parsePositiveInt(qtdClassificados);
+  const parsedFormatoMataMata = parseFormatoMataMata(formatoMataMata);
+
+  if (!parsedQtdGrupos || parsedQtdGrupos > 26) {
+    return res.status(400).json({ error: 'qtdGrupos deve ser um inteiro positivo entre 1 e 26.' });
+  }
+  if (!parsedQtdClassificados) {
+    return res.status(400).json({ error: 'qtdClassificados deve ser um inteiro positivo.' });
+  }
+  if (!parsedFormatoMataMata) {
+    return res.status(400).json({ error: 'formatoMataMata deve ser 1 (MD1) ou 3 (MD3).' });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE tournaments
+      SET
+        qtdGrupos = $1,
+        qtdClassificados = $2,
+        formatoMataMata = $3
+      WHERE id = $4
+      RETURNING qtdGrupos, qtdClassificados, formatoMataMata
+      `,
+      [parsedQtdGrupos, parsedQtdClassificados, parsedFormatoMataMata, tournamentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    return res.status(200).json({ message: 'Setup da copa atualizado com sucesso!', ...result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao atualizar setup da copa.' });
+  }
+});
+
+app.post('/generateCupGroups', auth, async (req, res) => {
+  const { tournamentId, qtdGrupos, qtdClassificados, formatoMataMata } = req.body;
+
+  if (!tournamentId) return res.status(400).json({ error: 'tournamentId é obrigatório.' });
+
+  const parsedQtdGruposBody = qtdGrupos !== undefined ? parsePositiveInt(qtdGrupos) : null;
+  const parsedQtdClassificadosBody = qtdClassificados !== undefined ? parsePositiveInt(qtdClassificados) : null;
+  const parsedFormatoMataMataBody = formatoMataMata !== undefined ? parseFormatoMataMata(formatoMataMata) : null;
+
+  if (qtdGrupos !== undefined && (!parsedQtdGruposBody || parsedQtdGruposBody > 26)) {
+    return res.status(400).json({ error: 'qtdGrupos deve ser um inteiro positivo entre 1 e 26.' });
+  }
+  if (qtdClassificados !== undefined && !parsedQtdClassificadosBody) {
+    return res.status(400).json({ error: 'qtdClassificados deve ser um inteiro positivo.' });
+  }
+  if (formatoMataMata !== undefined && !parsedFormatoMataMataBody) {
+    return res.status(400).json({ error: 'formatoMataMata deve ser 1 (MD1) ou 3 (MD3).' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Bloqueia a linha para evitar condições de corrida entre configs/sorteios.
+    const tournamentResult = await client.query(
+      'SELECT qtdGrupos, qtdClassificados, formatoMataMata FROM tournaments WHERE id = $1 FOR UPDATE',
+      [tournamentId]
+    );
+
+    if (tournamentResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    let {
+      qtdGrupos: qtdGruposDb,
+      qtdClassificados: qtdClassificadosDb,
+      formatoMataMata: formatoMataMataDb
+    } = tournamentResult.rows[0];
+
+    // Se o front enviar valores, aplicamos antes do sorteio.
+    const qtdGruposFinal = parsedQtdGruposBody ?? qtdGruposDb;
+    const qtdClassificadosFinal = parsedQtdClassificadosBody ?? qtdClassificadosDb;
+    const formatoMataMataFinal = parsedFormatoMataMataBody ?? formatoMataMataDb;
+
+    await client.query(
+      `
+      UPDATE tournaments
+      SET
+        qtdGrupos = $1,
+        qtdClassificados = $2,
+        formatoMataMata = $3
+      WHERE id = $4
+      `,
+      [qtdGruposFinal, qtdClassificadosFinal, formatoMataMataFinal, tournamentId]
+    );
+
+    if (!qtdGruposFinal || qtdGruposFinal < 1 || qtdGruposFinal > 26) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'qtdGrupos inválido.' });
+    }
+    if (!qtdClassificadosFinal || qtdClassificadosFinal < 1) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'qtdClassificados inválido.' });
+    }
+    if (formatoMataMataFinal !== 1 && formatoMataMataFinal !== 3) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'formatoMataMata inválido.' });
+    }
+
+    const participantsResult = await client.query(
+      'SELECT id FROM participants WHERE tournaments_id = $1 ORDER BY id',
+      [tournamentId]
+    );
+
+    const participantIds = participantsResult.rows.map(r => r.id);
+    const total = participantIds.length;
+
+    if (total === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Não há participantes cadastrados para este torneio.' });
+    }
+    if (qtdGruposFinal > total) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'qtdGrupos não pode ser maior que a quantidade de participantes.' });
+    }
+
+    // Shuffle Fisher-Yates
+    for (let i = participantIds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [participantIds[i], participantIds[j]] = [participantIds[j], participantIds[i]];
+    }
+
+    // Distribui participantes o mais parelho possível entre grupos.
+    const baseSize = Math.floor(total / qtdGruposFinal);
+    const rem = total % qtdGruposFinal;
+
+    // Como a distribuição pode criar grupos menores (quando `rem > 0`),
+    // para garantir "qtdClassificados por grupo" precisamos que o menor grupo comporte isso.
+    const minGroupSize = baseSize; // grupos "sem sobra" têm tamanho baseSize
+    if (qtdClassificadosFinal > minGroupSize) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'qtdClassificados não pode exceder o tamanho mínimo de grupo com a distribuição atual.'
+      });
+    }
+
+    const labels = ALPHABET.slice(0, qtdGruposFinal).split('');
+    const assignments = []; // { participantId, grupo }
+    const groupMembers = new Map(); // grupo -> participantIds[]
+
+    for (const label of labels) groupMembers.set(label, []);
+
+    let idx = 0;
+    for (let g = 0; g < qtdGruposFinal; g++) {
+      const label = labels[g];
+      const size = baseSize + (g < rem ? 1 : 0);
+      const slice = participantIds.slice(idx, idx + size);
+      idx += size;
+
+      for (const pid of slice) {
+        assignments.push({ participantId: pid, grupo: label });
+        groupMembers.get(label).push(pid);
+      }
+    }
+
+    // Reseta estatísticas e aplica o grupo.
+    await client.query(
+      `
+      UPDATE participants
+      SET
+        grupo = NULL,
+        pontos = 0,
+        vitorias = 0,
+        derrotas = 0,
+        empates = 0,
+        saldo = 0,
+        posicao = NULL
+      WHERE tournaments_id = $1
+      `,
+      [tournamentId]
+    );
+
+    // Bulk update grupo via VALUES:
+    // participantId placeholders: 2..(2N+1) par e grupo: 3..(2N+2) impar.
+    const valuesFlat = [];
+    const groupsTuples = [];
+    for (let k = 0; k < assignments.length; k++) {
+      const { participantId, grupo } = assignments[k];
+      // Placeholder 1 é tournamentId. Depois vêm pares.
+      const pIdx = 1 + k * 2 + 1; // participantId
+      const gIdx = 1 + k * 2 + 2; // grupo
+      valuesFlat.push(participantId, grupo);
+      groupsTuples.push(`($${pIdx}, $${gIdx})`);
+    }
+
+    await client.query(
+      `
+      UPDATE participants p
+      SET
+        grupo = v.grupo
+      FROM (VALUES ${groupsTuples.join(',')}) AS v(participant_id, grupo)
+      WHERE p.id = v.participant_id AND p.tournaments_id = $1
+      `,
+      [tournamentId, ...valuesFlat]
+    );
+
+    // Recria jogos da fase de grupos.
+    await client.query('DELETE FROM tournament_matches WHERE tournament_id = $1', [tournamentId]);
+
+    const bestOf = formatoMataMataFinal;
+    const createdMatches = [];
+
+    for (const [grupo, members] of groupMembers.entries()) {
+      // Gera round-robin: todos contra todos (sem ida/volta).
+      for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+          const playerAId = members[i];
+          const playerBId = members[j];
+
+          const matchInsertRes = await client.query(
+            `
+            INSERT INTO tournament_matches
+              (tournament_id, player_a_id, player_b_id, winner_id, phase, best_of, score_a, score_b, grupo)
+            VALUES
+              ($1, $2, $3, NULL, 'groups', $4, 0, 0, $5)
+            RETURNING id
+            `,
+            [tournamentId, playerAId, playerBId, bestOf, grupo]
+          );
+
+          const matchId = matchInsertRes.rows[0].id;
+          createdMatches.push(matchId);
+
+          await client.query(
+            `
+            INSERT INTO tournament_games (match_id, game_number)
+            SELECT $1, gs
+            FROM generate_series(1, $2) AS gs
+            `,
+            [matchId, bestOf]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: 'Grupos sorteados e fase de grupos gerada com sucesso!',
+      qtdParticipantes: total,
+      qtdGrupos: qtdGruposFinal,
+      qtdClassificadosPorGrupo: qtdClassificadosFinal,
+      formatoMataMata: formatoMataMataFinal,
+      qtdPartidasGeradas: createdMatches.length
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao gerar grupos.' });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/login', async (req, res) => {
   const { user, password } = req.body;
 
@@ -533,6 +881,60 @@ app.get('/getPrizes', auth, async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Erro ao consultar prêmios.' });
+  }
+});
+
+app.get('/players/:name/prize-pokemons', async (req, res) => {
+  const rawName = req.params.name;
+  const playerName = typeof rawName === 'string' ? rawName.trim() : '';
+
+  if (!playerName) {
+    return res.status(400).json({ error: 'Nome do jogador é obrigatório.' });
+  }
+
+  try {
+    const playerResult = await pool.query(
+      'SELECT id, name FROM players WHERE LOWER(name) = LOWER($1) LIMIT 1',
+      [playerName]
+    );
+
+    if (playerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Jogador não encontrado' });
+    }
+
+    const player = playerResult.rows[0];
+    const transactionsResult = await pool.query(
+      `
+      SELECT
+        si.id AS item_id,
+        si.pokemon_name,
+        si.generation,
+        st.purchased_at,
+        si.options_poke,
+        st.delivered
+      FROM shop_transactions st
+      JOIN shop_items si ON st.item_id = si.id
+      WHERE st.player_id = $1
+      ORDER BY st.purchased_at DESC
+      `,
+      [player.id]
+    );
+
+    return res.status(200).json({
+      player_id: player.id,
+      player_name: player.name,
+      prize_pokemons: transactionsResult.rows.map(t => ({
+        item_id: t.item_id,
+        pokemon_name: t.pokemon_name,
+        generation: t.generation,
+        options_poke: t.options_poke,
+        purchased_at: t.purchased_at ? new Date(t.purchased_at).toISOString() : null,
+        delivered: t.delivered
+      }))
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao buscar pokémons de prêmio do jogador.' });
   }
 });
 

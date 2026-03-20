@@ -7,6 +7,8 @@ $(document).ready(function () {
   let tournamentId;
   let discordURL;
   let enviardiscord = false;
+  let playerPrizePokemonNames = [];
+  let currentTournamentGen = null;
   const urlBE = localStorage.getItem('urlBE');
 
   function debounce(func, delay) {
@@ -23,6 +25,10 @@ $(document).ready(function () {
     return allPokemonData.find(pokemon => pokemon.name === nome);
   }
 
+  function normalizePokemonName(name) {
+    return (name || '').toString().trim().toLowerCase();
+  }
+
   function getPrize(codigo) {
     return fetch(`${urlBE}/getPrizes?codigo=${codigo}`)
       .then(res => res.json())
@@ -31,6 +37,45 @@ $(document).ready(function () {
         console.error('Erro ao buscar prêmio:', err);
         return null;
       });
+  }
+
+  function getPlayerPrizePokemonsByName(name) {
+    return fetch(`${urlBE}/players/${encodeURIComponent(name)}/prize-pokemons`)
+      .then(async res => {
+        if (res.status === 404) return null;
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error || 'Erro ao buscar pokémons de prêmio por nick.');
+        }
+        return res.json();
+      })
+      .catch(err => {
+        console.error('Erro ao buscar pokémons de prêmio por nick:', err);
+        return null;
+      });
+  }
+
+  function applyPlayerPrizePokemons(prizePokemons) {
+    const tournamentGen = Number.isFinite(Number(currentTournamentGen)) ? Number(currentTournamentGen) : null;
+    playerPrizePokemonNames = Array.from(
+      new Set(
+        (prizePokemons || [])
+          .filter(p => {
+            if (!tournamentGen) return true;
+            if (p?.generation == null) return true;
+            return Number(p.generation) <= tournamentGen;
+          })
+          .map(p => normalizePokemonName(p.pokemon_name || p.name))
+          .filter(Boolean)
+      )
+    );
+
+    renderPokemonList(window.config?.monotype ? $('#monotype-list').val() : null);
+
+    const selected = $('#pokemon-list').val() || [];
+    if (selected.length) {
+      $('#pokemon-list').trigger('change');
+    }
   }
 
   function applyPrizePokemon(prize) {
@@ -89,13 +134,16 @@ $(document).ready(function () {
   function renderPokemonList(selectedType = null) {
     $('#pokemon-list').empty();
 
-    const bannedList = window.config?.listabanido?.map(p => p.toLowerCase()) || [];
+    const bannedList = window.config?.listabanido?.map(p => normalizePokemonName(p)) || [];
+    const prizeSet = new Set(playerPrizePokemonNames.map(p => normalizePokemonName(p)));
 
     allPokes.forEach(p => {
       if (Array.isArray(p)) {
         const formasFiltradas = p.filter(pd => {
           if (!pd.name) return false;
-          if (bannedList.includes(pd.name.toLowerCase())) return false;
+          const normalizedName = normalizePokemonName(pd.name);
+          const isPrizePokemon = prizeSet.has(normalizedName);
+          if (bannedList.includes(normalizedName) && !isPrizePokemon) return false;
           if (!selectedType) return true;
           return pd.type && pd.type.includes(selectedType);
         });
@@ -106,7 +154,9 @@ $(document).ready(function () {
 
       } else {
         if (!p.name) return;
-        if (bannedList.includes(p.name.toLowerCase())) return;
+        const normalizedName = normalizePokemonName(p.name);
+        const isPrizePokemon = prizeSet.has(normalizedName);
+        if (bannedList.includes(normalizedName) && !isPrizePokemon) return;
         if (selectedType && (!p.type || !p.type.includes(selectedType))) return;
 
         $('#pokemon-list').append(new Option(p.name, p.name));
@@ -149,6 +199,7 @@ $(document).ready(function () {
     }
 
     tournamentId = config.id;
+    currentTournamentGen = config.gen ?? null;
     sprites = config.sprites ?? 'emerald';
     qtdEscolha = config.qtdescolha ?? 10;
 
@@ -170,18 +221,36 @@ $(document).ready(function () {
       }
     }, 500));
 
+    $('#name').on('input', debounce(function () {
+      const nick = $(this).val().trim();
+      if (nick.length < 3) {
+        if (playerPrizePokemonNames.length) {
+          applyPlayerPrizePokemons([]);
+        }
+        return;
+      }
+
+      getPlayerPrizePokemonsByName(nick).then(data => {
+        const prizePokemons = data?.prize_pokemons || [];
+        applyPlayerPrizePokemons(prizePokemons);
+      });
+    }, 500));
+
     $('#pokemon-list').on('change', function () {
       const selected = $(this).val() || [];
       const pokemonsLimitados = config.listalimitado || [];
       const lendariosLimitados = config.listalimitadolendario || [];
+      const prizeSet = new Set(playerPrizePokemonNames.map(p => normalizePokemonName(p)));
+      const countLimited = selected.filter(p => pokemonsLimitados.includes(p) && !prizeSet.has(normalizePokemonName(p))).length;
+      const countLegendaryLimited = selected.filter(p => lendariosLimitados.includes(p) && !prizeSet.has(normalizePokemonName(p))).length;
 
-      if (selected.filter(p => pokemonsLimitados.includes(p)).length > (config.qtdlimitado ?? 0)) {
+      if (countLimited > (config.qtdlimitado ?? 0)) {
         Swal.fire({ icon: 'warning', title: 'Limite de Pokemons Limitados Excedido', text: `Você pode selecionar no máximo ${config.qtdlimitado ?? 0} Pokémon limitados.` });
         $(this).val($(this).data('prevSelection')).trigger('change.select2');
         return;
       }
 
-      if (selected.filter(p => lendariosLimitados.includes(p)).length > (config.qtdlimitadolendario ?? 0)) {
+      if (countLegendaryLimited > (config.qtdlimitadolendario ?? 0)) {
         Swal.fire({ icon: 'warning', title: 'Limite de Lendários Excedido', text: `Você pode selecionar no máximo ${config.qtdlimitadolendario ?? 0} Pokémon lendários.` });
         $(this).val($(this).data('prevSelection')).trigger('change.select2');
         return;

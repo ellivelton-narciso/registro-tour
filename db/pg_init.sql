@@ -56,80 +56,25 @@ CREATE TABLE IF NOT EXISTS players (
 );
 
 
---  TOURNAMENTS (TORNEIOS)
-
-CREATE TABLE IF NOT EXISTS tournaments (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    titulo2 VARCHAR(255) DEFAULT NULL,
-    gen INT DEFAULT NULL,
-    sprites VARCHAR(255) DEFAULT NULL,
-    qtdLimitado INT DEFAULT NULL,
-    qtdLimitadoLendario INT DEFAULT NULL,
-    listaLimitado TEXT[] DEFAULT '{}',
-    listaLimitadoLendario TEXT[] DEFAULT '{}',
-    listaBanido TEXT[] DEFAULT '{}',
-    hook VARCHAR(255) DEFAULT NULL,
-    enviarDiscord BOOLEAN DEFAULT FALSE,
-    qtdEscolha INT DEFAULT NULL,
-    encerrado BOOLEAN DEFAULT FALSE,
-    prizes BOOLEAN DEFAULT FALSE,
-    monotype BOOLEAN DEFAULT FALSE,
-    qtdGrupos INT DEFAULT 2,
-    qtdClassificados INT DEFAULT 2,
-    formatoMataMata SMALLINT DEFAULT 3,
-    dateStart DATE DEFAULT CURRENT_DATE,
-    dateEnd DATE DEFAULT NULL
-);
-
-
---  PARTICIPANTS (PARTICIPANTES DOS TORNEIOS)
-
-CREATE TABLE IF NOT EXISTS participants (
-    id SERIAL PRIMARY KEY,
-    tournaments_id INT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
-    players_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    grupo CHAR(1) DEFAULT NULL,
-    pontos INT DEFAULT 0,
-    vitorias INT DEFAULT 0,
-    derrotas INT DEFAULT 0,
-    empates INT DEFAULT 0,
-    saldo INT DEFAULT 0,
-    posicao INT DEFAULT NULL,
-    UNIQUE (tournaments_id, players_id)
-);
-
-
---  CHOICES (POKÉMONS ESCOLHIDOS PELOS PARTICIPANTES)
-
-CREATE TABLE IF NOT EXISTS choices (
-    id SERIAL PRIMARY KEY,
-    participants_id INT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
-    pokemons_id INT NOT NULL,
-    pokemons_af VARCHAR(100) NOT NULL DEFAULT '',
-    tournaments_id INT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
-    CONSTRAINT choices_pokemons_id_af_fkey FOREIGN KEY (pokemons_id, pokemons_af)
-        REFERENCES pokemons (id, af) ON DELETE CASCADE
-);
-
 
 --  SHOP
-
 CREATE TABLE IF NOT EXISTS shop_items (
-    id SERIAL PRIMARY KEY,
-    pokemon_name VARCHAR(50) NOT NULL,
-    price INT NOT NULL,
-    sold BOOLEAN DEFAULT FALSE,
-    generation int4 NOT NULL
+	id serial4 NOT NULL,
+	pokemon_name varchar(50) NOT NULL,
+	price int4 NOT NULL,
+	sold bool DEFAULT false NULL,
+	generation int4 DEFAULT 1 NOT NULL,
+	options_poke varchar(50) NULL,
+	CONSTRAINT shop_items_pkey PRIMARY KEY (id)
 );
 
-
 CREATE TABLE IF NOT EXISTS shop_transactions (
-    id SERIAL PRIMARY KEY,
-    player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    item_id INT NOT NULL REFERENCES shop_items(id) ON DELETE CASCADE,
-    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    delivered boolean NOT NULL DEFAULT false
+	id serial4 NOT NULL,
+	player_id int4 NOT NULL,
+	item_id int4 NOT NULL,
+	purchased_at timestamp DEFAULT CURRENT_TIMESTAMP NULL,
+	delivered bool DEFAULT false NOT NULL,
+	CONSTRAINT shop_transactions_pkey PRIMARY KEY (id)
 );
 
 
@@ -202,6 +147,61 @@ CREATE TABLE IF NOT EXISTS match_results (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+--  TOURNAMENTS (TORNEIOS)
+
+CREATE TABLE IF NOT EXISTS tournaments (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    titulo2 VARCHAR(255) DEFAULT NULL,
+    gen INT DEFAULT NULL,
+    sprites VARCHAR(255) DEFAULT NULL,
+    qtdLimitado INT DEFAULT NULL,
+    qtdLimitadoLendario INT DEFAULT NULL,
+    listaLimitado TEXT[] DEFAULT '{}',
+    listaLimitadoLendario TEXT[] DEFAULT '{}',
+    listaBanido TEXT[] DEFAULT '{}',
+    hook VARCHAR(255) DEFAULT NULL,
+    enviarDiscord BOOLEAN DEFAULT FALSE,
+    qtdEscolha INT DEFAULT NULL,
+    encerrado BOOLEAN DEFAULT FALSE,
+    prizes BOOLEAN DEFAULT FALSE,
+    monotype BOOLEAN DEFAULT FALSE,
+    qtdGrupos INT DEFAULT 2,
+    qtdClassificados INT DEFAULT 2,
+    formatoMataMata SMALLINT DEFAULT 3,
+    dateStart DATE DEFAULT CURRENT_DATE,
+    dateEnd DATE DEFAULT NULL
+);
+
+
+--  PARTICIPANTS (PARTICIPANTES DOS TORNEIOS)
+
+CREATE TABLE IF NOT EXISTS participants (
+    id SERIAL PRIMARY KEY,
+    tournaments_id INT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    players_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    grupo CHAR(1) DEFAULT NULL,
+    pontos INT DEFAULT 0,
+    vitorias INT DEFAULT 0,
+    derrotas INT DEFAULT 0,
+    empates INT DEFAULT 0,
+    saldo INT DEFAULT 0,
+    posicao INT DEFAULT NULL,
+    UNIQUE (tournaments_id, players_id)
+);
+
+
+--  CHOICES (POKÉMONS ESCOLHIDOS PELOS PARTICIPANTES)
+
+CREATE TABLE IF NOT EXISTS choices (
+    id SERIAL PRIMARY KEY,
+    participants_id INT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+    pokemons_id INT NOT NULL,
+    pokemons_af VARCHAR(100) NOT NULL DEFAULT '',
+    tournaments_id INT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    CONSTRAINT choices_pokemons_id_af_fkey FOREIGN KEY (pokemons_id, pokemons_af)
+        REFERENCES pokemons (id, af) ON DELETE CASCADE
+);
 
 --  MATCHES E RESULTADOS DE TORNEIOS
 
