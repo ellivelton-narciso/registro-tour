@@ -5,6 +5,7 @@ const axios = require('axios');
 const pool = require('./db/connection');
 const auth = require('./authMiddleware');
 const cupKnockout = require('./cupKnockout');
+const tournamentFees = require('./tournamentFees');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
@@ -57,15 +58,28 @@ app.post('/submit', async (req, res) => {
       return res.status(400).json({ error: 'Torneio não encontrado.' });
     }
     const tournament = tournamentResult.rows[0];
+    const baseFee = tournament.paymentregister ?? tournament.paymentRegister ?? 0;
 
-    if (player.coins < tournament.paymentregister) {
+    const feeInfo = await tournamentFees.resolveRegistrationFee(
+      client,
+      tournamentId,
+      player.id,
+      baseFee
+    );
+
+    if (player.coins < feeInfo.fee) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Saldo insuficiente.' });
+      const extra = feeInfo.doubled
+        ? ` Taxa dobrada (${feeInfo.woCount} W.O. no torneio anterior).`
+        : '';
+      return res.status(400).json({
+        error: `Saldo insuficiente. Inscrição: ${feeInfo.fee} coins.${extra}`
+      });
     }
 
     await client.query(
       'UPDATE players SET coins = coins - $1 WHERE id = $2',
-      [tournament.paymentregister, player.id]
+      [feeInfo.fee, player.id]
     );
 
     const participantInsert = await client.query(
@@ -95,7 +109,14 @@ app.post('/submit', async (req, res) => {
 
     await client.query('COMMIT');
 
-    return res.status(200).json({ message: 'Participante cadastrado com sucesso no torneio!' });
+    let message = 'Participante cadastrado com sucesso no torneio!';
+    if (feeInfo.doubled) {
+      message += ` Taxa cobrada: ${feeInfo.fee} coins (dobrada por ${feeInfo.woCount} W.O. no torneio anterior).`;
+    } else if (feeInfo.fee > 0) {
+      message += ` Taxa cobrada: ${feeInfo.fee} coins.`;
+    }
+
+    return res.status(200).json({ message, fee: feeInfo.fee, feeDoubled: feeInfo.doubled });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
