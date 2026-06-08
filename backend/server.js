@@ -414,7 +414,8 @@ app.post('/updateCupSetup', auth, async (req, res) => {
 app.post('/generateCupGroups', auth, async (req, res) => {
   const { tournamentId, qtdGrupos, qtdClassificados, formatoMataMata } = req.body;
 
-  if (!tournamentId) return res.status(400).json({ error: 'tournamentId é obrigatório.' });
+  const parsedTournamentId = parsePositiveInt(tournamentId);
+  if (!parsedTournamentId) return res.status(400).json({ error: 'tournamentId inválido.' });
 
   const parsedQtdGruposBody = qtdGrupos !== undefined ? parsePositiveInt(qtdGrupos) : null;
   const parsedQtdClassificadosBody = qtdClassificados !== undefined ? parsePositiveInt(qtdClassificados) : null;
@@ -437,7 +438,7 @@ app.post('/generateCupGroups', auth, async (req, res) => {
     // Bloqueia a linha para evitar condições de corrida entre configs/sorteios.
     const tournamentResult = await client.query(
       'SELECT qtdGrupos, qtdClassificados, formatoMataMata FROM tournaments WHERE id = $1 FOR UPDATE',
-      [tournamentId]
+      [parsedTournamentId]
     );
 
     if (tournamentResult.rows.length === 0) {
@@ -465,7 +466,7 @@ app.post('/generateCupGroups', auth, async (req, res) => {
         formatoMataMata = $3
       WHERE id = $4
       `,
-      [qtdGruposFinal, qtdClassificadosFinal, formatoMataMataFinal, tournamentId]
+      [qtdGruposFinal, qtdClassificadosFinal, formatoMataMataFinal, parsedTournamentId]
     );
 
     if (!qtdGruposFinal || qtdGruposFinal < 1 || qtdGruposFinal > 26) {
@@ -482,12 +483,12 @@ app.post('/generateCupGroups', auth, async (req, res) => {
     }
 
     const participantsResult = await client.query(
-      'SELECT id FROM participants WHERE tournaments_id = $1 ORDER BY id',
-      [tournamentId]
+      'SELECT id, players_id FROM participants WHERE tournaments_id = $1 ORDER BY id',
+      [parsedTournamentId]
     );
 
-    const participantIds = participantsResult.rows.map(r => r.id);
-    const total = participantIds.length;
+    const participants = participantsResult.rows;
+    const total = participants.length;
 
     if (total === 0) {
       await client.query('ROLLBACK');
@@ -499,9 +500,9 @@ app.post('/generateCupGroups', auth, async (req, res) => {
     }
 
     // Shuffle Fisher-Yates
-    for (let i = participantIds.length - 1; i > 0; i--) {
+    for (let i = participants.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [participantIds[i], participantIds[j]] = [participantIds[j], participantIds[i]];
+      [participants[i], participants[j]] = [participants[j], participants[i]];
     }
 
     // Distribui participantes o mais parelho possível entre grupos.
@@ -520,7 +521,7 @@ app.post('/generateCupGroups', auth, async (req, res) => {
 
     const labels = ALPHABET.slice(0, qtdGruposFinal).split('');
     const assignments = []; // { participantId, grupo }
-    const groupMembers = new Map(); // grupo -> participantIds[]
+    const groupMembers = new Map(); // grupo -> playersId[]
 
     for (const label of labels) groupMembers.set(label, []);
 
@@ -528,12 +529,12 @@ app.post('/generateCupGroups', auth, async (req, res) => {
     for (let g = 0; g < qtdGruposFinal; g++) {
       const label = labels[g];
       const size = baseSize + (g < rem ? 1 : 0);
-      const slice = participantIds.slice(idx, idx + size);
+      const slice = participants.slice(idx, idx + size);
       idx += size;
 
-      for (const pid of slice) {
-        assignments.push({ participantId: pid, grupo: label });
-        groupMembers.get(label).push(pid);
+      for (const participant of slice) {
+        assignments.push({ participantId: participant.id, grupo: label });
+        groupMembers.get(label).push(participant.players_id);
       }
     }
 
@@ -551,7 +552,7 @@ app.post('/generateCupGroups', auth, async (req, res) => {
         posicao = NULL
       WHERE tournaments_id = $1
       `,
-      [tournamentId]
+      [parsedTournamentId]
     );
 
     // Bulk update grupo via VALUES:
@@ -564,7 +565,7 @@ app.post('/generateCupGroups', auth, async (req, res) => {
       const pIdx = 1 + k * 2 + 1; // participantId
       const gIdx = 1 + k * 2 + 2; // grupo
       valuesFlat.push(participantId, grupo);
-      groupsTuples.push(`($${pIdx}, $${gIdx})`);
+      groupsTuples.push(`($${pIdx}::int, $${gIdx}::char(1))`);
     }
 
     await client.query(
@@ -575,44 +576,45 @@ app.post('/generateCupGroups', auth, async (req, res) => {
       FROM (VALUES ${groupsTuples.join(',')}) AS v(participant_id, grupo)
       WHERE p.id = v.participant_id AND p.tournaments_id = $1
       `,
-      [tournamentId, ...valuesFlat]
+      [parsedTournamentId, ...valuesFlat]
     );
 
     // Recria jogos da fase de grupos.
-    await client.query('DELETE FROM tournament_matches WHERE tournament_id = $1', [tournamentId]);
+    await client.query('DELETE FROM tournament_matches WHERE tournament_id = $1', [parsedTournamentId]);
 
-    const bestOf = formatoMataMataFinal;
+    const GROUP_PHASE_BEST_OF = 1;
     const createdMatches = [];
 
+    const insertGroupMatch = async (playerAId, playerBId, grupo) => {
+      const matchInsertRes = await client.query(
+        `
+        INSERT INTO tournament_matches
+          (tournament_id, player_a_id, player_b_id, winner_id, phase, best_of, score_a, score_b, grupo)
+        VALUES
+          ($1, $2, $3, NULL, 'groups', $4, 0, 0, $5)
+        RETURNING id
+        `,
+        [parsedTournamentId, playerAId, playerBId, GROUP_PHASE_BEST_OF, grupo]
+      );
+
+      const matchId = matchInsertRes.rows[0].id;
+      createdMatches.push(matchId);
+
+      await client.query(
+        'INSERT INTO tournament_games (match_id, game_number) VALUES ($1, 1)',
+        [matchId]
+      );
+    };
+
     for (const [grupo, members] of groupMembers.entries()) {
-      // Gera round-robin: todos contra todos (sem ida/volta).
+      // Round-robin ida e volta: cada par se enfrenta nos dois sentidos (1 jogo por confronto).
       for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
           const playerAId = members[i];
           const playerBId = members[j];
 
-          const matchInsertRes = await client.query(
-            `
-            INSERT INTO tournament_matches
-              (tournament_id, player_a_id, player_b_id, winner_id, phase, best_of, score_a, score_b, grupo)
-            VALUES
-              ($1, $2, $3, NULL, 'groups', $4, 0, 0, $5)
-            RETURNING id
-            `,
-            [tournamentId, playerAId, playerBId, bestOf, grupo]
-          );
-
-          const matchId = matchInsertRes.rows[0].id;
-          createdMatches.push(matchId);
-
-          await client.query(
-            `
-            INSERT INTO tournament_games (match_id, game_number)
-            SELECT $1, gs
-            FROM generate_series(1, $2) AS gs
-            `,
-            [matchId, bestOf]
-          );
+          await insertGroupMatch(playerAId, playerBId, grupo);
+          await insertGroupMatch(playerBId, playerAId, grupo);
         }
       }
     }
