@@ -1,12 +1,33 @@
 -- CONFIG WHATSAPP
 
+CREATE TABLE IF NOT EXISTS seasons (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP NULL,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    base_rating INT NOT NULL DEFAULT 1000
+);
+
+CREATE TABLE IF NOT EXISTS season_player_archive (
+    id SERIAL PRIMARY KEY,
+    season_id INT NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+    player_id INT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    final_rating INT NOT NULL,
+    total_matches INT NOT NULL DEFAULT 0,
+    total_wins INT NOT NULL DEFAULT 0,
+    archived_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (season_id, player_id)
+);
+
 CREATE TABLE config (
 	id SERIAL PRIMARY KEY,
 	k_match INT NULL,
 	k_tournament INT NULL,
 	group_ids TEXT[] NULL,
 	admin_ids TEXT[] NULL,
-	min_rating INT NULL
+	min_rating INT NULL,
+	current_season_id INT NULL REFERENCES seasons(id)
 );
 
 --  USUÁRIOS E TOKENS
@@ -49,7 +70,7 @@ CREATE TABLE IF NOT EXISTS players (
     user_app_id INT DEFAULT 0,
     name VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(255) DEFAULT NULL UNIQUE,
-    rating INT NOT NULL DEFAULT 1200,
+    rating INT NOT NULL DEFAULT 1000,
     coins INT NOT NULL DEFAULT 0,
     total_matches INT DEFAULT 0,
     total_wins INT DEFAULT 0
@@ -133,6 +154,7 @@ CREATE TABLE IF NOT EXISTS matches (
     player_a_id INT REFERENCES players(id),
     player_b_id INT REFERENCES players(id),
     winner VARCHAR(1) NOT NULL,
+    season_id INT REFERENCES seasons(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
