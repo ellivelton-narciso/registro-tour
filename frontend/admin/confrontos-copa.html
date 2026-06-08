@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <script src="../assets/js/config.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confrontos da Copa</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <link rel="stylesheet" href="../assets/css/style.css">
+
+  <script>
+    const token = sessionStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+  </script>
+</head>
+<body>
+  <div id="nav-bar"></div>
+  <script>
+    fetch('nav/nav.html')
+      .then(r => r.text())
+      .then(html => { document.getElementById('nav-bar').innerHTML = html; })
+      .catch(console.error);
+  </script>
+
+  <div class="container-fluid mt-4 mb-5 px-3 px-md-4">
+    <h2 class="text-center mb-4">Confrontos da Copa</h2>
+
+    <div class="row g-3 mb-4">
+      <div class="col-lg-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">Status</h5>
+            <p class="mb-1"><strong>Torneio:</strong> <span id="tournamentName">—</span></p>
+            <p class="mb-1" id="groupsStatus">Grupos: —</p>
+            <p class="mb-1" id="knockoutStatus">Mata-mata: —</p>
+            <div class="d-grid gap-2 mt-3">
+              <button class="btn btn-primary" id="btnGenerateKnockout" type="button" disabled>
+                Gerar mata-mata
+              </button>
+              <button class="btn btn-outline-primary" id="btnAdvanceKnockout" type="button" disabled>
+                Avançar rodada do mata-mata
+              </button>
+              <button class="btn btn-outline-secondary" id="btnRefresh" type="button">
+                Atualizar
+              </button>
+            </div>
+            <div class="small text-muted mt-3">
+              Edite confrontos abaixo se o bot errar. Perdedor sempre 0; vencedor 0–6 (vivos) ou 10 (W.O.).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">Classificação dos grupos</h5>
+            <p class="small text-muted mb-2">Linhas em <strong>negrito</strong> = zona de classificação.</p>
+            <div id="standingsByGroup"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="mb-3">
+          <h5 class="mb-2">Confrontos</h5>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <input type="search" class="form-control form-control-sm" id="filterPlayer"
+                placeholder="Filtrar por jogador..." autocomplete="off">
+            </div>
+            <div class="col-md-3">
+              <select class="form-select form-select-sm" id="filterStatus">
+                <option value="">Todos os status</option>
+                <option value="pending">Só pendentes</option>
+                <option value="done">Só concluídos</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select form-select-sm" id="filterPhase">
+                <option value="">Todas as fases</option>
+                <option value="groups">Fase de grupos</option>
+                <option value="r16">Oitavas</option>
+                <option value="qf">Quartas</option>
+                <option value="sf">Semifinal</option>
+                <option value="final">Final</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <button class="btn btn-outline-secondary btn-sm w-100" id="btnClearFilters" type="button">
+                Limpar filtros
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-bordered align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Fase</th>
+                <th>Grupo</th>
+                <th>Jogador A</th>
+                <th>Placar A</th>
+                <th>Jogador B</th>
+                <th>Placar B</th>
+                <th>Vencedor</th>
+                <th style="width: 140px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="matchesBody"></tbody>
+          </table>
+        </div>
+        <div class="text-muted small" id="matchesHint"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="../assets/js/cupGroupsUi.js"></script>
+  <script src="../assets/js/confrontosCopa.js"></script>
+</body>
+</html>

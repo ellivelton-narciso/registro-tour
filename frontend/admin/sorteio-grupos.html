@@ -83,19 +83,7 @@
               <button class="btn btn-outline-primary btn-sm" id="refreshParticipants" type="button">Atualizar</button>
             </div>
 
-            <div class="table-responsive">
-              <table class="table table-striped align-middle">
-                <thead>
-                  <tr>
-                    <th style="width: 90px;">Grupo</th>
-                    <th>Nome</th>
-                    <th>Email</th>
-                  </tr>
-                </thead>
-                <tbody id="participantsTableBody">
-                </tbody>
-              </table>
-            </div>
+            <div id="participantsByGroup"></div>
             <div class="text-muted small" id="participantsHint"></div>
           </div>
         </div>
@@ -105,6 +93,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="../assets/js/cupGroupsUi.js"></script>
   <script src="../assets/js/sorteioGrupos.js"></script>
 </body>
 </html>

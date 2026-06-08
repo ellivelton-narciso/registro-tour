@@ -42,6 +42,41 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
   }
 
+  function renderParticipantsByGroup(participants) {
+    const container = document.getElementById('participantsByGroup');
+    const groups = CupGroupsUi.groupByGrupo(participants, (p) => p.grupo);
+
+    CupGroupsUi.renderGroupedTables(container, groups, {
+      emptyMessage: 'Nenhum participante encontrado para este torneio.',
+      renderTable(rows) {
+        const wrap = document.createElement('div');
+        wrap.className = 'table-responsive';
+        const table = document.createElement('table');
+        table.className = 'table table-sm table-striped table-hover align-middle mb-0';
+        table.innerHTML = `
+          <thead class="table-light">
+            <tr>
+              <th>Nome</th>
+              <th>Contato</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        `;
+        const tbody = table.querySelector('tbody');
+        for (const p of rows) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${p.name}</td>
+            <td class="text-muted small">${p.email || '—'}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+        wrap.appendChild(table);
+        return wrap;
+      }
+    });
+  }
+
   async function loadParticipants() {
     const res = await fetch(`${urlBE}/getTournamentParticipants?tournamentId=${currentTournamentId}`, {
       headers: authHeaders()
@@ -49,33 +84,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Erro ao carregar participantes.');
 
-    const tbody = document.getElementById('participantsTableBody');
-    tbody.innerHTML = '';
-
     if (!Array.isArray(data) || data.length === 0) {
+      renderParticipantsByGroup([]);
       setHint('Nenhum participante encontrado para este torneio.');
       return;
     }
 
-    for (const p of data) {
-      const tr = document.createElement('tr');
+    renderParticipantsByGroup(data);
 
-      const tdGrupo = document.createElement('td');
-      tdGrupo.textContent = p.grupo ?? '-';
-      tr.appendChild(tdGrupo);
-
-      const tdNome = document.createElement('td');
-      tdNome.textContent = p.name;
-      tr.appendChild(tdNome);
-
-      const tdEmail = document.createElement('td');
-      tdEmail.textContent = p.email || '';
-      tr.appendChild(tdEmail);
-
-      tbody.appendChild(tr);
-    }
-
-    setHint(`Total: ${data.length} participante(s).`);
+    const grouped = CupGroupsUi.groupByGrupo(data, (p) => p.grupo);
+    const withGroup = grouped.filter((g) => g.grupo !== '_sem_grupo').length;
+    setHint(
+      `Total: ${data.length} participante(s)` +
+      (withGroup ? ` · ${withGroup} grupo(s)` : ' · sorteio ainda não realizado')
+    );
   }
 
   async function saveCupSetup() {

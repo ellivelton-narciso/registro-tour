@@ -4,6 +4,7 @@ const cors = require('cors');
 const axios = require('axios');
 const pool = require('./db/connection');
 const auth = require('./authMiddleware');
+const cupKnockout = require('./cupKnockout');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
@@ -633,6 +634,530 @@ app.post('/generateCupGroups', auth, async (req, res) => {
     await client.query('ROLLBACK');
     console.error(err);
     return res.status(500).json({ error: 'Erro ao gerar grupos.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/getCupStatus', auth, async (req, res) => {
+  const id = parsePositiveInt(req.query.tournamentId);
+  if (!id) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  try {
+    const tournamentRes = await pool.query(
+      'SELECT id, name, qtdGrupos, qtdClassificados, formatoMataMata, dateend FROM tournaments WHERE id = $1',
+      [id]
+    );
+    if (tournamentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+    const tournament = tournamentRes.rows[0];
+
+    const groupStatsRes = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE winner_id IS NOT NULL)::int AS completed
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = 'groups'
+      `,
+      [id]
+    );
+    const groupStats = groupStatsRes.rows[0];
+
+    const knockoutRes = await pool.query(
+      `
+      SELECT phase,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE winner_id IS NOT NULL)::int AS completed
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase <> 'groups'
+      GROUP BY phase
+      `,
+      [id]
+    );
+
+    const knockoutRounds = knockoutRes.rows
+      .map((r) => ({
+        phase: r.phase,
+        total: r.total,
+        completed: r.completed,
+        pending: r.total - r.completed,
+        sortKey: cupKnockout.phaseSortKey(r.phase)
+      }))
+      .sort((a, b) => a.sortKey - b.sortKey);
+
+    const hasKnockout = knockoutRounds.length > 0;
+    const groupsComplete = groupStats.total > 0 && groupStats.completed === groupStats.total;
+    const latestKnockout = knockoutRounds[knockoutRounds.length - 1] || null;
+    const latestKnockoutComplete = latestKnockout
+      ? latestKnockout.completed === latestKnockout.total
+      : false;
+    const hasFinalWinner = await pool.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = 'final' AND winner_id IS NOT NULL
+      `,
+      [id]
+    );
+
+    return res.status(200).json({
+      tournamentId: id,
+      tournamentName: tournament.name,
+      qtdGrupos: tournament.qtdgrupos ?? tournament.qtdGrupos,
+      qtdClassificados: tournament.qtdclassificados ?? tournament.qtdClassificados,
+      formatoMataMata: tournament.formatomatamata ?? tournament.formatoMataMata,
+      dateEnd: tournament.dateend ?? tournament.dateEnd,
+      groups: {
+        total: groupStats.total,
+        completed: groupStats.completed,
+        pending: groupStats.total - groupStats.completed,
+        complete: groupsComplete
+      },
+      knockout: {
+        hasKnockout,
+        rounds: knockoutRounds,
+        latestPhase: latestKnockout?.phase ?? null,
+        latestComplete: latestKnockoutComplete,
+        cupFinished: hasFinalWinner.rows[0].n > 0
+      },
+      canGenerateKnockout: groupsComplete && !hasKnockout,
+      canAdvanceKnockout:
+        hasKnockout &&
+        latestKnockoutComplete &&
+        latestKnockout?.phase !== 'final' &&
+        hasFinalWinner.rows[0].n === 0
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao buscar status da copa.' });
+  }
+});
+
+app.get('/getGroupStandings', auth, async (req, res) => {
+  const id = parsePositiveInt(req.query.tournamentId);
+  if (!id) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  const client = await pool.connect();
+  try {
+    const tournamentRes = await client.query(
+      'SELECT qtdClassificados FROM tournaments WHERE id = $1',
+      [id]
+    );
+    if (tournamentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    const qtdClassificados =
+      tournamentRes.rows[0].qtdclassificados ?? tournamentRes.rows[0].qtdClassificados ?? 2;
+
+    const { standings } = await cupKnockout.fetchGroupStandings(client, id, qtdClassificados);
+    return res.status(200).json(standings);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao buscar classificação dos grupos.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/getTournamentMatches', auth, async (req, res) => {
+  const id = parsePositiveInt(req.query.tournamentId);
+  if (!id) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        tm.id,
+        tm.phase,
+        tm.grupo,
+        tm.best_of,
+        tm.score_a,
+        tm.score_b,
+        tm.winner_id,
+        tm.ended_at,
+        tm.player_a_id,
+        tm.player_b_id,
+        pa.name AS player_a_name,
+        pb.name AS player_b_name,
+        pw.name AS winner_name
+      FROM tournament_matches tm
+      JOIN players pa ON pa.id = tm.player_a_id
+      JOIN players pb ON pb.id = tm.player_b_id
+      LEFT JOIN players pw ON pw.id = tm.winner_id
+      WHERE tm.tournament_id = $1
+      ORDER BY
+        CASE tm.phase
+          WHEN 'groups' THEN 0
+          WHEN 'r16' THEN 1
+          WHEN 'qf' THEN 2
+          WHEN 'sf' THEN 3
+          WHEN 'final' THEN 4
+          ELSE 5
+        END,
+        tm.grupo NULLS LAST,
+        tm.id
+      `,
+      [id]
+    );
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao listar confrontos.' });
+  }
+});
+
+app.post('/generateKnockout', auth, async (req, res) => {
+  const tournamentId = parsePositiveInt(req.body.tournamentId);
+  if (!tournamentId) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const tournamentRes = await client.query(
+      'SELECT qtdClassificados, formatoMataMata FROM tournaments WHERE id = $1 FOR UPDATE',
+      [tournamentId]
+    );
+    if (tournamentRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    const qtdClassificados =
+      tournamentRes.rows[0].qtdclassificados ?? tournamentRes.rows[0].qtdClassificados;
+    const formatoMataMata =
+      tournamentRes.rows[0].formatomatamata ?? tournamentRes.rows[0].formatoMataMata;
+
+    const pendingGroups = await client.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = 'groups' AND winner_id IS NULL
+      `,
+      [tournamentId]
+    );
+    if (pendingGroups.rows[0].n > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Ainda há confrontos pendentes na fase de grupos.' });
+    }
+
+    const existingKo = await client.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase <> 'groups'
+      `,
+      [tournamentId]
+    );
+    if (existingKo.rows[0].n > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'O mata-mata já foi gerado para este torneio.' });
+    }
+
+    const { qualifiedByGroup, groupLabels, standings } = await cupKnockout.fetchGroupStandings(
+      client,
+      tournamentId,
+      qtdClassificados
+    );
+
+    for (const row of standings) {
+      await client.query(
+        'UPDATE participants SET posicao = $1 WHERE id = $2',
+        [row.posicao, row.participant_id]
+      );
+    }
+
+    const pairings = cupKnockout.buildKnockoutPairings(
+      qualifiedByGroup,
+      groupLabels,
+      qtdClassificados
+    );
+
+    if (pairings.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Não foi possível montar confrontos do mata-mata.' });
+    }
+
+    const playerCount = pairings.length * 2;
+    if (!cupKnockout.isPowerOfTwo(playerCount)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Total de classificados (${playerCount}) precisa ser potência de 2 (4, 8, 16...).`
+      });
+    }
+
+    const phase = cupKnockout.knockoutPhaseForPlayers(playerCount);
+    if (!phase) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Quantidade de classificados não suportada para chave.' });
+    }
+
+    const created = await cupKnockout.insertKnockoutRound(
+      client,
+      tournamentId,
+      pairings,
+      formatoMataMata,
+      phase
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: 'Mata-mata gerado com sucesso!',
+      phase,
+      qtdConfrontos: created.length,
+      matchIds: created
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao gerar mata-mata.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/advanceKnockout', auth, async (req, res) => {
+  const tournamentId = parsePositiveInt(req.body.tournamentId);
+  if (!tournamentId) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const tournamentRes = await client.query(
+      'SELECT formatoMataMata FROM tournaments WHERE id = $1 FOR UPDATE',
+      [tournamentId]
+    );
+    if (tournamentRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+    const formatoMataMata =
+      tournamentRes.rows[0].formatomatamata ?? tournamentRes.rows[0].formatoMataMata;
+
+    const roundsRes = await client.query(
+      `
+      SELECT phase,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE winner_id IS NOT NULL)::int AS completed
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase <> 'groups'
+      GROUP BY phase
+      `,
+      [tournamentId]
+    );
+
+    if (roundsRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Mata-mata ainda não foi gerado.' });
+    }
+
+    const rounds = roundsRes.rows
+      .map((r) => ({ ...r, sortKey: cupKnockout.phaseSortKey(r.phase) }))
+      .sort((a, b) => a.sortKey - b.sortKey);
+
+    const latest = rounds[rounds.length - 1];
+    if (latest.completed !== latest.total) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'A rodada atual do mata-mata ainda não terminou.' });
+    }
+    if (latest.phase === 'final') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'A final já foi definida.' });
+    }
+
+    const nextPhase = cupKnockout.nextKnockoutPhase(latest.phase);
+    if (!nextPhase) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Não há próxima rodada para gerar.' });
+    }
+
+    const winnersRes = await client.query(
+      `
+      SELECT winner_id
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = $2 AND winner_id IS NOT NULL
+      ORDER BY id
+      `,
+      [tournamentId, latest.phase]
+    );
+
+    const winners = winnersRes.rows.map((r) => r.winner_id);
+    if (winners.length < 2 || winners.length % 2 !== 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Número inválido de vencedores na rodada anterior.' });
+    }
+
+    const pairings = [];
+    for (let i = 0; i < winners.length; i += 2) {
+      pairings.push([winners[i], winners[i + 1]]);
+    }
+
+    const created = await cupKnockout.insertKnockoutRound(
+      client,
+      tournamentId,
+      pairings,
+      formatoMataMata,
+      nextPhase
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: `Rodada ${nextPhase} gerada com sucesso!`,
+      phase: nextPhase,
+      qtdConfrontos: created.length,
+      matchIds: created
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao avançar mata-mata.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.put('/updateTournamentMatch/:matchId', auth, async (req, res) => {
+  const matchId = parsePositiveInt(req.params.matchId);
+  if (!matchId) return res.status(400).json({ error: 'matchId inválido.' });
+
+  const { winnerPlayerId, scoreA, scoreB, clearResult } = req.body;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const matchRes = await client.query(
+      'SELECT * FROM tournament_matches WHERE id = $1 FOR UPDATE',
+      [matchId]
+    );
+    if (matchRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Confronto não encontrado.' });
+    }
+
+    const match = matchRes.rows[0];
+    const tournamentId = match.tournament_id;
+
+    if (clearResult) {
+      await client.query(
+        `
+        UPDATE tournament_matches
+        SET winner_id = NULL, score_a = 0, score_b = 0, ended_at = NULL
+        WHERE id = $1
+        `,
+        [matchId]
+      );
+      await client.query(
+        'UPDATE tournament_games SET winner_id = NULL WHERE match_id = $1',
+        [matchId]
+      );
+    } else {
+      const parsedScoreA = scoreA !== undefined ? parseInt(scoreA, 10) : match.score_a;
+      const parsedScoreB = scoreB !== undefined ? parseInt(scoreB, 10) : match.score_b;
+
+      if (!Number.isFinite(parsedScoreA) || !Number.isFinite(parsedScoreB)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'scoreA e scoreB devem ser números válidos.' });
+      }
+
+      const winnerId = parsePositiveInt(winnerPlayerId);
+      if (!winnerId) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'winnerPlayerId inválido.' });
+      }
+      if (winnerId !== match.player_a_id && winnerId !== match.player_b_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Vencedor deve ser um dos jogadores do confronto.' });
+      }
+
+      const loserId = winnerId === match.player_a_id ? match.player_b_id : match.player_a_id;
+      const winnerScore = winnerId === match.player_a_id ? parsedScoreA : parsedScoreB;
+      const loserScore = winnerId === match.player_a_id ? parsedScoreB : parsedScoreA;
+
+      if (loserScore !== 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'O perdedor deve ter placar 0.' });
+      }
+      if (winnerScore < 0 || (winnerScore > 6 && winnerScore !== 10)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Placar do vencedor: 0–6 (vivos) ou 10 (W.O.).' });
+      }
+
+      await client.query(
+        `
+        UPDATE tournament_matches
+        SET winner_id = $1, score_a = $2, score_b = $3, ended_at = NOW()
+        WHERE id = $4
+        `,
+        [winnerId, parsedScoreA, parsedScoreB, matchId]
+      );
+
+      await client.query(
+        `
+        UPDATE tournament_games
+        SET winner_id = $1
+        WHERE match_id = $2 AND game_number = 1
+        `,
+        [winnerId, matchId]
+      );
+    }
+
+    if (match.phase === 'groups') {
+      await cupKnockout.rebuildParticipantStats(client, tournamentId);
+      const tournamentRes = await client.query(
+        'SELECT qtdClassificados FROM tournaments WHERE id = $1',
+        [tournamentId]
+      );
+      const qtdClassificados =
+        tournamentRes.rows[0]?.qtdclassificados ??
+        tournamentRes.rows[0]?.qtdClassificados ??
+        2;
+      const { standings } = await cupKnockout.fetchGroupStandings(
+        client,
+        tournamentId,
+        qtdClassificados
+      );
+      for (const row of standings) {
+        await client.query(
+          'UPDATE participants SET posicao = $1 WHERE id = $2',
+          [row.posicao, row.participant_id]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    const updated = await pool.query(
+      `
+      SELECT
+        tm.*,
+        pa.name AS player_a_name,
+        pb.name AS player_b_name,
+        pw.name AS winner_name
+      FROM tournament_matches tm
+      JOIN players pa ON pa.id = tm.player_a_id
+      JOIN players pb ON pb.id = tm.player_b_id
+      LEFT JOIN players pw ON pw.id = tm.winner_id
+      WHERE tm.id = $1
+      `,
+      [matchId]
+    );
+
+    return res.status(200).json({
+      message: clearResult ? 'Resultado removido.' : 'Confronto atualizado.',
+      match: updated.rows[0]
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao atualizar confronto.' });
   } finally {
     client.release();
   }
