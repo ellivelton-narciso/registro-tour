@@ -69,52 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!res.ok) throw new Error(data.error || 'Erro ao carregar classificação.');
 
     const container = document.getElementById('standingsByGroup');
-    if (!Array.isArray(data)) {
-      CupGroupsUi.renderGroupedTables(container, [], { emptyMessage: 'Sem dados de grupos.', renderTable: () => document.createElement('div') });
-      return;
-    }
-    const groups = CupGroupsUi.groupByGrupo(data, (row) => row.grupo);
-
-    CupGroupsUi.renderGroupedTables(container, groups, {
-      emptyMessage: 'Sem dados de grupos.',
-      renderTable(rows) {
-        const wrap = document.createElement('div');
-        wrap.className = 'table-responsive';
-        const table = document.createElement('table');
-        table.className = 'table table-sm table-striped table-hover align-middle mb-0';
-        table.innerHTML = `
-          <thead class="table-light">
-            <tr>
-              <th>#</th>
-              <th>Jogador</th>
-              <th>Pts</th>
-              <th>Saldo</th>
-              <th>V</th>
-              <th>D</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        `;
-        const tbody = table.querySelector('tbody');
-        for (const row of rows) {
-          const tr = document.createElement('tr');
-          if ((row.posicao ?? 99) <= qtdClassificados) {
-            tr.className = 'fw-semibold table-success';
-          }
-          tr.innerHTML = `
-            <td>${row.posicao ?? '-'}</td>
-            <td>${row.name}</td>
-            <td>${row.pontos ?? 0}</td>
-            <td>${row.saldo ?? 0}</td>
-            <td>${row.vitorias ?? 0}</td>
-            <td>${row.derrotas ?? 0}</td>
-          `;
-          tbody.appendChild(tr);
-        }
-        wrap.appendChild(table);
-        return wrap;
-      }
-    });
+    CupGroupsUi.renderStandingsByGroup(container, data, qtdClassificados);
   }
 
   function getFilteredMatches() {

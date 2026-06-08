@@ -123,6 +123,51 @@ app.get('/getConfig', async (req, res) => {
   }
 });
 
+app.get('/public/cupStandings', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const tournamentRes = await client.query(
+      `
+      SELECT id, name, titulo2, qtdClassificados, dateEnd
+      FROM tournaments
+      WHERE dateEnd IS NULL
+      ORDER BY dateStart DESC, id DESC
+      LIMIT 1
+      `
+    );
+
+    if (tournamentRes.rows.length === 0) {
+      return res.status(200).json({ active: false });
+    }
+
+    const tournament = tournamentRes.rows[0];
+    const tournamentId = tournament.id;
+    const qtdClassificados =
+      tournament.qtdclassificados ?? tournament.qtdClassificados ?? 2;
+
+    const { standings } = await cupKnockout.fetchGroupStandings(
+      client,
+      tournamentId,
+      qtdClassificados
+    );
+
+    return res.status(200).json({
+      active: true,
+      tournamentId,
+      tournamentName: tournament.name,
+      titulo2: tournament.titulo2,
+      qtdClassificados,
+      hasGroups: standings.length > 0,
+      standings
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao buscar classificação pública dos grupos.' });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/createTournament', auth, async (req, res) => {
   const {
     titulo,
