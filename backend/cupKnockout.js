@@ -1,4 +1,11 @@
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const WO_SALDO_DELTA = 3;
+
+function saldoDeltaForWinnerAlive(winnerAlive) {
+  const score = Number(winnerAlive);
+  if (!Number.isFinite(score)) return 0;
+  return score > 6 ? WO_SALDO_DELTA : score;
+}
 
 const KNOCKOUT_PHASE_ORDER = {
   r16: 1,
@@ -148,6 +155,7 @@ async function rebuildParticipantStats(client, tournamentId) {
     const winnerId = m.winner_id;
     const loserId = winnerId === m.player_a_id ? m.player_b_id : m.player_a_id;
     const winnerAlive = winnerId === m.player_a_id ? m.score_a : m.score_b;
+    const saldoDelta = saldoDeltaForWinnerAlive(winnerAlive);
 
     await client.query(
       `
@@ -158,7 +166,7 @@ async function rebuildParticipantStats(client, tournamentId) {
         saldo = saldo + $1
       WHERE tournaments_id = $2 AND players_id = $3
       `,
-      [winnerAlive, tournamentId, winnerId]
+      [saldoDelta, tournamentId, winnerId]
     );
 
     await client.query(
@@ -169,7 +177,7 @@ async function rebuildParticipantStats(client, tournamentId) {
         saldo = saldo - $1
       WHERE tournaments_id = $2 AND players_id = $3
       `,
-      [winnerAlive, tournamentId, loserId]
+      [saldoDelta, tournamentId, loserId]
     );
   }
 }
@@ -206,6 +214,7 @@ async function insertKnockoutRound(client, tournamentId, pairings, bestOf, phase
 }
 
 module.exports = {
+  saldoDeltaForWinnerAlive,
   ALPHABET,
   KNOCKOUT_PHASE_ORDER,
   isPowerOfTwo,
