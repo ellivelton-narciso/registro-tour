@@ -108,7 +108,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!res.ok) throw new Error(data.error || 'Erro ao carregar confrontos.');
 
     allMatches = Array.isArray(data) ? data : [];
+    renderBracket();
     renderMatches();
+  }
+
+  function renderBracket() {
+    const koMatches = allMatches.filter((m) => m.phase !== 'groups');
+    const bracketCard = document.getElementById('bracketCard');
+    const bracketContainer = document.getElementById('knockoutBracket');
+    const hasBracket = CupBracketUi.renderBracket(bracketContainer, koMatches);
+    bracketCard.classList.toggle('d-none', !hasBracket);
   }
 
   function renderMatches() {

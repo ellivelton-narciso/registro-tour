@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const noGroupsMessage = document.getElementById('noGroupsMessage');
   const standingsSection = document.getElementById('standingsSection');
   const standingsContainer = document.getElementById('standingsByGroup');
+  const bracketSection = document.getElementById('bracketSection');
+  const bracketContainer = document.getElementById('knockoutBracket');
+  const bracketHint = document.getElementById('bracketHint');
   const tournamentSubtitle = document.getElementById('tournamentSubtitle');
   const lastUpdated = document.getElementById('lastUpdated');
   const btnRefresh = document.getElementById('btnRefresh');
@@ -38,6 +41,17 @@ document.addEventListener('DOMContentLoaded', () => {
       data.standings,
       data.qtdClassificados ?? 2
     );
+
+    if (data.knockout?.hasKnockout) {
+      bracketSection.classList.remove('d-none');
+      CupBracketUi.renderBracket(bracketContainer, data.knockout.matches);
+      bracketHint.textContent = data.knockout.cupFinished
+        ? 'Campeão definido.'
+        : 'Confrontos da esquerda para a direita; vencedores avançam na ordem da chave.';
+    } else {
+      bracketSection.classList.add('d-none');
+      bracketContainer.innerHTML = '';
+    }
 
     lastUpdated.textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
   }

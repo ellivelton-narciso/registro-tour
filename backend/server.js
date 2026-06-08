@@ -151,6 +151,48 @@ app.get('/public/cupStandings', async (req, res) => {
       qtdClassificados
     );
 
+    const knockoutRes = await client.query(
+      `
+      SELECT
+        tm.id,
+        tm.phase,
+        tm.best_of,
+        tm.score_a,
+        tm.score_b,
+        tm.winner_id,
+        tm.player_a_id,
+        tm.player_b_id,
+        pa.name AS player_a_name,
+        pb.name AS player_b_name,
+        pw.name AS winner_name
+      FROM tournament_matches tm
+      JOIN players pa ON pa.id = tm.player_a_id
+      JOIN players pb ON pb.id = tm.player_b_id
+      LEFT JOIN players pw ON pw.id = tm.winner_id
+      WHERE tm.tournament_id = $1
+        AND tm.phase <> 'groups'
+      ORDER BY
+        CASE tm.phase
+          WHEN 'r16' THEN 1
+          WHEN 'qf' THEN 2
+          WHEN 'sf' THEN 3
+          WHEN 'final' THEN 4
+          ELSE 5
+        END,
+        tm.id
+      `,
+      [tournamentId]
+    );
+
+    const finalWinnerRes = await client.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = 'final' AND winner_id IS NOT NULL
+      `,
+      [tournamentId]
+    );
+
     return res.status(200).json({
       active: true,
       tournamentId,
@@ -158,7 +200,12 @@ app.get('/public/cupStandings', async (req, res) => {
       titulo2: tournament.titulo2,
       qtdClassificados,
       hasGroups: standings.length > 0,
-      standings
+      standings,
+      knockout: {
+        hasKnockout: knockoutRes.rows.length > 0,
+        cupFinished: finalWinnerRes.rows[0].n > 0,
+        matches: knockoutRes.rows
+      }
     });
   } catch (err) {
     console.error(err);
