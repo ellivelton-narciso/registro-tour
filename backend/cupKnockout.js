@@ -52,16 +52,16 @@ function buildKnockoutPairings(qualifiedByGroup, groupLabels, qtdClassificados) 
   }
 
   if (qtdClassificados === 2) {
-    for (let i = 0; i < groupLabels.length; i += 2) {
+  // 1º grupo N x 2º grupo N+1 (circular: D→A)
+    const n = groupLabels.length;
+    for (let i = 0; i < n; i++) {
       const g1 = groupLabels[i];
-      const g2 = groupLabels[i + 1];
-      if (!g2) break;
+      const g2 = groupLabels[(i + 1) % n];
 
       const q1 = qualifiedByGroup[g1] || [];
       const q2 = qualifiedByGroup[g2] || [];
 
       if (q1[0] && q2[1]) pairings.push([q1[0].players_id, q2[1].players_id]);
-      if (q2[0] && q1[1]) pairings.push([q2[0].players_id, q1[1].players_id]);
     }
     return pairings;
   }
