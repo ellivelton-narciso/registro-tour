@@ -18,6 +18,13 @@ function isPowerOfTwo(n) {
   return n > 0 && (n & (n - 1)) === 0;
 }
 
+function nextPowerOfTwo(n) {
+  if (n <= 1) return 1;
+  let p = 1;
+  while (p < n) p <<= 1;
+  return p;
+}
+
 function knockoutPhaseForPlayers(count) {
   if (count === 2) return 'final';
   if (count === 4) return 'sf';
@@ -36,51 +43,64 @@ function phaseSortKey(phase) {
   return KNOCKOUT_PHASE_ORDER[phase] ?? 99;
 }
 
-function buildKnockoutPairings(qualifiedByGroup, groupLabels, qtdClassificados) {
+function shuffle(list) {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function buildKnockoutRound(qualifiedByGroup, groupLabels, qtdClassificados) {
+  if (qtdClassificados !== 2) {
+    return { pairings: [], byes: [], totalSlots: 0, playerCount: 0 };
+  }
+
+  const groupEntries = [];
+  for (const group of groupLabels) {
+    const qualified = qualifiedByGroup[group] || [];
+    if (!qualified[0] || !qualified[1]) continue;
+    groupEntries.push({
+      group,
+      leftPlayerId: qualified[0].players_id,
+      rightPlayerId: qualified[1].players_id
+    });
+  }
+
+  const playerCount = groupEntries.length * 2;
+  if (playerCount < 2) {
+    return { pairings: [], byes: [], totalSlots: 0, playerCount };
+  }
+
+  const totalSlots = nextPowerOfTwo(playerCount);
+  const halfSlots = totalSlots / 2;
+
+  const leftSide = shuffle(groupEntries.map((e) => e.leftPlayerId));
+  const rightSide = shuffle(groupEntries.map((e) => e.rightPlayerId));
+
+  while (leftSide.length < halfSlots) leftSide.push(null);
+  while (rightSide.length < halfSlots) rightSide.push(null);
+
+  const bracket = [...leftSide, ...rightSide];
   const pairings = [];
+  const byes = [];
 
-  if (qtdClassificados === 1) {
-    const firsts = groupLabels
-      .map((g) => qualifiedByGroup[g]?.[0])
-      .filter(Boolean);
-    for (let i = 0; i < firsts.length; i += 2) {
-      if (firsts[i + 1]) {
-        pairings.push([firsts[i].players_id, firsts[i + 1].players_id]);
-      }
-    }
-    return pairings;
-  }
-
-  if (qtdClassificados === 2) {
-  // 1º grupo N x 2º grupo N+1 (circular: D→A)
-    const n = groupLabels.length;
-    for (let i = 0; i < n; i++) {
-      const g1 = groupLabels[i];
-      const g2 = groupLabels[(i + 1) % n];
-
-      const q1 = qualifiedByGroup[g1] || [];
-      const q2 = qualifiedByGroup[g2] || [];
-
-      if (q1[0] && q2[1]) pairings.push([q1[0].players_id, q2[1].players_id]);
-    }
-    return pairings;
-  }
-
-  const all = [];
-  for (const g of groupLabels) {
-    for (const q of qualifiedByGroup[g] || []) {
-      all.push(q);
-    }
-  }
-  all.sort((a, b) => a.posicao - b.posicao || String(a.grupo).localeCompare(String(b.grupo)));
-
-  for (let i = 0; i < all.length; i += 2) {
-    if (all[i + 1]) {
-      pairings.push([all[i].players_id, all[i + 1].players_id]);
+  for (let i = 0; i < bracket.length; i += 2) {
+    const a = bracket[i];
+    const b = bracket[i + 1];
+    if (a && b) {
+      pairings.push([a, b]);
+    } else if (a || b) {
+      byes.push(a || b);
     }
   }
 
-  return pairings;
+  return { pairings, byes, totalSlots, playerCount };
+}
+
+function buildKnockoutPairings(qualifiedByGroup, groupLabels, qtdClassificados) {
+  return buildKnockoutRound(qualifiedByGroup, groupLabels, qtdClassificados).pairings;
 }
 
 async function fetchGroupStandings(client, tournamentId, qtdClassificados) {
@@ -213,16 +233,40 @@ async function insertKnockoutRound(client, tournamentId, pairings, bestOf, phase
   return created;
 }
 
+async function insertKnockoutByes(client, tournamentId, byes, phase) {
+  const created = [];
+
+  for (const playerId of byes) {
+    const insertRes = await client.query(
+      `
+      INSERT INTO tournament_matches (
+        tournament_id, player_a_id, player_b_id, winner_id,
+        phase, best_of, score_a, score_b, grupo, ended_at
+      )
+      VALUES ($1, $2, $2, $2, $3, 1, 1, 0, NULL, CURRENT_TIMESTAMP)
+      RETURNING id
+      `,
+      [tournamentId, playerId, phase]
+    );
+    created.push(insertRes.rows[0].id);
+  }
+
+  return created;
+}
+
 module.exports = {
   saldoDeltaForWinnerAlive,
   ALPHABET,
   KNOCKOUT_PHASE_ORDER,
   isPowerOfTwo,
+  nextPowerOfTwo,
   knockoutPhaseForPlayers,
   nextKnockoutPhase,
   phaseSortKey,
+  buildKnockoutRound,
   buildKnockoutPairings,
   fetchGroupStandings,
   rebuildParticipantStats,
-  insertKnockoutRound
+  insertKnockoutRound,
+  insertKnockoutByes
 };

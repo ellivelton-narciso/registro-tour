@@ -984,26 +984,26 @@ app.post('/generateKnockout', auth, async (req, res) => {
       );
     }
 
-    const pairings = cupKnockout.buildKnockoutPairings(
+    if (qtdClassificados !== 2) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Geração atual do mata-mata suporta exatamente 2 classificados por grupo.'
+      });
+    }
+
+    const bracketRound = cupKnockout.buildKnockoutRound(
       qualifiedByGroup,
       groupLabels,
       qtdClassificados
     );
+    const { pairings, byes, totalSlots, playerCount } = bracketRound;
 
-    if (pairings.length === 0) {
+    if (pairings.length === 0 && byes.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Não foi possível montar confrontos do mata-mata.' });
     }
 
-    const playerCount = pairings.length * 2;
-    if (!cupKnockout.isPowerOfTwo(playerCount)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: `Total de classificados (${playerCount}) precisa ser potência de 2 (4, 8, 16...).`
-      });
-    }
-
-    const phase = cupKnockout.knockoutPhaseForPlayers(playerCount);
+    const phase = cupKnockout.knockoutPhaseForPlayers(totalSlots);
     if (!phase) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Quantidade de classificados não suportada para chave.' });
@@ -1016,14 +1016,22 @@ app.post('/generateKnockout', auth, async (req, res) => {
       formatoMataMata,
       phase
     );
+    const byeMatchIds = await cupKnockout.insertKnockoutByes(
+      client,
+      tournamentId,
+      byes,
+      phase
+    );
 
     await client.query('COMMIT');
 
     return res.status(200).json({
       message: 'Mata-mata gerado com sucesso!',
       phase,
+      qtdClassificados: playerCount,
       qtdConfrontos: created.length,
-      matchIds: created
+      qtdByes: byeMatchIds.length,
+      matchIds: [...created, ...byeMatchIds]
     });
   } catch (err) {
     await client.query('ROLLBACK');
