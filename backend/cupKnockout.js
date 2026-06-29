@@ -8,12 +8,28 @@ function saldoDeltaForWinnerAlive(winnerAlive) {
 }
 
 const KNOCKOUT_PHASE_ORDER = {
-  r16: 1,
-  qf: 2,
-  sf: 3,
-  '3p': 4,
-  final: 5
+  r128: 1,
+  r64: 2,
+  r32: 3,
+  r16: 4,
+  qf: 5,
+  sf: 6,
+  '3p': 7,
+  final: 8
 };
+
+const KNOCKOUT_PHASE_LABELS = {
+  r128: 'Round 128',
+  r64: 'Round 64',
+  r32: 'Round 32',
+  r16: 'Oitavas',
+  qf: 'Quartas',
+  sf: 'Semifinal',
+  '3p': '3º lugar',
+  final: 'Final'
+};
+
+const KNOCKOUT_ROUND_CHAIN = ['r128', 'r64', 'r32', 'r16', 'qf', 'sf', 'final'];
 
 function isPowerOfTwo(n) {
   return n > 0 && (n & (n - 1)) === 0;
@@ -26,17 +42,22 @@ function nextPowerOfTwo(n) {
   return p;
 }
 
+function knockoutPhaseForBracketSize(totalSlots) {
+  if (!Number.isFinite(totalSlots) || totalSlots < 2) return null;
+  const depth = Math.round(Math.log2(totalSlots));
+  const phases = ['final', 'sf', 'qf', 'r16', 'r32', 'r64', 'r128'];
+  const index = depth - 1;
+  return phases[index] || null;
+}
+
 function knockoutPhaseForPlayers(count) {
-  if (count === 2) return 'final';
-  if (count === 4) return 'sf';
-  if (count === 8) return 'qf';
-  if (count === 16) return 'r16';
-  return null;
+  return knockoutPhaseForBracketSize(nextPowerOfTwo(count));
 }
 
 function nextKnockoutPhase(phase) {
-  const map = { r16: 'qf', qf: 'sf', sf: 'final' };
-  return map[phase] || null;
+  const idx = KNOCKOUT_ROUND_CHAIN.indexOf(phase);
+  if (idx === -1 || idx >= KNOCKOUT_ROUND_CHAIN.length - 1) return null;
+  return KNOCKOUT_ROUND_CHAIN[idx + 1];
 }
 
 function buildThirdPlacePairing(semifinalMatches) {
@@ -110,6 +131,42 @@ function buildKnockoutRound(qualifiedByGroup, groupLabels, qtdClassificados) {
 
 function buildKnockoutPairings(qualifiedByGroup, groupLabels, qtdClassificados) {
   return buildKnockoutRound(qualifiedByGroup, groupLabels, qtdClassificados).pairings;
+}
+
+function buildDirectKnockoutRound(playerIds) {
+  const shuffled = shuffle(playerIds);
+  const playerCount = shuffled.length;
+  if (playerCount < 2) {
+    return { pairings: [], byes: [], totalSlots: 0, playerCount };
+  }
+
+  const totalSlots = nextPowerOfTwo(playerCount);
+  const bracket = [...shuffled];
+  while (bracket.length < totalSlots) bracket.push(null);
+
+  const pairings = [];
+  const byes = [];
+  for (let i = 0; i < bracket.length; i += 2) {
+    const a = bracket[i];
+    const b = bracket[i + 1];
+    if (a && b) pairings.push([a, b]);
+    else if (a || b) byes.push(a || b);
+  }
+
+  return { pairings, byes, totalSlots, playerCount };
+}
+
+async function fetchAllParticipantPlayerIds(client, tournamentId) {
+  const { rows } = await client.query(
+    `
+    SELECT players_id
+    FROM participants
+    WHERE tournaments_id = $1
+    ORDER BY id
+    `,
+    [tournamentId]
+  );
+  return rows.map((row) => row.players_id);
 }
 
 async function fetchGroupStandings(client, tournamentId, qtdClassificados) {
@@ -267,13 +324,18 @@ module.exports = {
   saldoDeltaForWinnerAlive,
   ALPHABET,
   KNOCKOUT_PHASE_ORDER,
+  KNOCKOUT_PHASE_LABELS,
+  KNOCKOUT_ROUND_CHAIN,
   isPowerOfTwo,
   nextPowerOfTwo,
+  knockoutPhaseForBracketSize,
   knockoutPhaseForPlayers,
   nextKnockoutPhase,
   phaseSortKey,
   buildKnockoutRound,
   buildKnockoutPairings,
+  buildDirectKnockoutRound,
+  fetchAllParticipantPlayerIds,
   fetchGroupStandings,
   rebuildParticipantStats,
   insertKnockoutRound,

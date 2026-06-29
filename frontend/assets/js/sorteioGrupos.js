@@ -14,6 +14,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (el) el.textContent = text || '';
   }
 
+  function isKnockoutOnly() {
+    return document.getElementById('formatoCopa').value === 'knockout';
+  }
+
+  function syncFormatoCopaUi() {
+    const knockout = isKnockoutOnly();
+    document.getElementById('groupsSetup').classList.toggle('d-none', knockout);
+    document.getElementById('generateCupGroups').classList.toggle('d-none', knockout);
+    document.getElementById('generateDirectKnockout').classList.toggle('d-none', !knockout);
+    document.getElementById('setupHint').textContent = knockout
+      ? 'Copa eliminatória: todos os inscritos entram na chave (com byes até potência de 2). Mínimo 2 inscritos. Ao sortear novamente, a chave inteira é recriada.'
+      : 'Fase de grupos: round-robin ida e volta (1 jogo por confronto). O formato MD1/MD3 acima vale para o mata-mata. Ao sortear novamente, o backend recria a fase de grupos.';
+  }
+
   let currentTournamentId = null;
 
   function getTournamentIdFromConfig() {
@@ -36,10 +50,15 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('qtdGrupos').value = data.qtdGrupos ?? 2;
     document.getElementById('qtdClassificados').value = data.qtdClassificados ?? 2;
 
+    const formatoCopa = data.formatoCopa ?? data.formatocopa ?? 'groups';
+    document.getElementById('formatoCopa').value = formatoCopa;
+
     const sel = document.getElementById('formatoMataMata');
     if (sel && (data.formatoMataMata === 1 || data.formatoMataMata === 3)) {
       sel.value = String(data.formatoMataMata);
     }
+
+    syncFormatoCopaUi();
   }
 
   function renderParticipantsByGroup(participants) {
@@ -77,6 +96,35 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
   }
 
+  function renderParticipantsFlat(participants) {
+    const container = document.getElementById('participantsByGroup');
+    container.innerHTML = '';
+    if (!participants.length) {
+      container.innerHTML = '<p class="text-muted mb-0">Nenhum participante encontrado para este torneio.</p>';
+      return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'table-responsive';
+    wrap.innerHTML = `
+      <table class="table table-sm table-striped table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr><th>#</th><th>Nome</th><th>Contato</th></tr>
+        </thead>
+        <tbody>
+          ${participants.map((p, idx) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${p.name}</td>
+              <td class="text-muted small">${p.email || '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    container.appendChild(wrap);
+  }
+
   async function loadParticipants() {
     const res = await fetch(`${urlBE}/getTournamentParticipants?tournamentId=${currentTournamentId}`, {
       headers: authHeaders()
@@ -85,13 +133,18 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (!res.ok) throw new Error(data.error || 'Erro ao carregar participantes.');
 
     if (!Array.isArray(data) || data.length === 0) {
-      renderParticipantsByGroup([]);
+      renderParticipantsFlat([]);
       setHint('Nenhum participante encontrado para este torneio.');
       return;
     }
 
-    renderParticipantsByGroup(data);
+    if (isKnockoutOnly()) {
+      renderParticipantsFlat(data);
+      setHint(`Total: ${data.length} inscrito(s) · chave eliminatória`);
+      return;
+    }
 
+    renderParticipantsByGroup(data);
     const grouped = CupGroupsUi.groupByGrupo(data, (p) => p.grupo);
     const withGroup = grouped.filter((g) => g.grupo !== '_sem_grupo').length;
     setHint(
@@ -103,10 +156,14 @@ document.addEventListener('DOMContentLoaded', async function () {
   async function saveCupSetup() {
     const payload = {
       tournamentId: currentTournamentId,
-      qtdGrupos: document.getElementById('qtdGrupos').value,
-      qtdClassificados: document.getElementById('qtdClassificados').value,
+      formatoCopa: document.getElementById('formatoCopa').value,
       formatoMataMata: document.getElementById('formatoMataMata').value
     };
+
+    if (!isKnockoutOnly()) {
+      payload.qtdGrupos = document.getElementById('qtdGrupos').value;
+      payload.qtdClassificados = document.getElementById('qtdClassificados').value;
+    }
 
     const res = await fetch(`${urlBE}/updateCupSetup`, {
       method: 'POST',
@@ -163,10 +220,54 @@ document.addEventListener('DOMContentLoaded', async function () {
     await loadParticipants();
   }
 
+  async function generateDirectKnockout() {
+    const qtd = parseInt(document.getElementById('qtdParticipantes').value, 10) || 0;
+    if (qtd < 2) {
+      Swal.fire({ icon: 'warning', title: 'Inscritos insuficientes', text: 'São necessários pelo menos 2 inscritos.' });
+      return;
+    }
+
+    const confirmRes = await Swal.fire({
+      icon: 'warning',
+      title: 'Gerar chave eliminatória?',
+      text: 'Todos os inscritos entram no mata-mata. Confrontos anteriores deste torneio serão substituídos.',
+      showCancelButton: true,
+      confirmButtonText: 'Sim, sortear',
+      cancelButtonText: 'Cancelar'
+    });
+    if (!confirmRes.isConfirmed) return;
+
+    const res = await fetch(`${urlBE}/generateDirectKnockout`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        tournamentId: currentTournamentId,
+        formatoMataMata: document.getElementById('formatoMataMata').value
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao gerar mata-mata.');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Chave gerada',
+      text: data.message || `Rodada ${data.phase} criada com ${data.qtdConfrontos} confronto(s) e ${data.qtdByes || 0} bye(s).`
+    });
+
+    await loadCupSetup();
+    await loadParticipants();
+  }
+
   try {
     currentTournamentId = await getTournamentIdFromConfig();
     await loadCupSetup();
     await loadParticipants();
+
+    document.getElementById('formatoCopa').addEventListener('change', async () => {
+      syncFormatoCopaUi();
+      await loadParticipants();
+    });
 
     document.getElementById('saveCupSetup').addEventListener('click', async () => {
       try {
@@ -184,6 +285,14 @@ document.addEventListener('DOMContentLoaded', async function () {
       }
     });
 
+    document.getElementById('generateDirectKnockout').addEventListener('click', async () => {
+      try {
+        await generateDirectKnockout();
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
+      }
+    });
+
     document.getElementById('refreshParticipants')?.addEventListener('click', async () => {
       try {
         await loadParticipants();
@@ -196,4 +305,3 @@ document.addEventListener('DOMContentLoaded', async function () {
     console.error(err);
   }
 });
-

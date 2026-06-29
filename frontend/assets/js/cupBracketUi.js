@@ -1,5 +1,8 @@
 (function (global) {
   const PHASE_LABELS = {
+    r128: 'Round 128',
+    r64: 'Round 64',
+    r32: 'Round 32',
     r16: 'Oitavas',
     qf: 'Quartas',
     sf: 'Semifinal',
@@ -7,7 +10,7 @@
     final: 'Final'
   };
 
-  const PHASE_ORDER = ['r16', 'qf', 'sf', '3p', 'final'];
+  const PHASE_ORDER = ['r128', 'r64', 'r32', 'r16', 'qf', 'sf', '3p', 'final'];
 
   function groupKnockoutMatches(matches) {
     const byPhase = {};

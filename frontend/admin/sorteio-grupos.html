@@ -4,7 +4,7 @@
   <script src="../assets/js/config.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sorteio de Grupos</title>
+  <title>Sorteio da Copa</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
@@ -29,7 +29,7 @@
   </script>
 
   <div class="container mt-4 mb-5">
-    <h2 class="text-center mb-4">Sorteio de Grupos (Copa Fácil)</h2>
+    <h2 class="text-center mb-4">Sorteio da Copa</h2>
 
     <div class="row g-3">
       <div class="col-md-4">
@@ -41,14 +41,24 @@
             </div>
 
             <div class="mb-3">
-              <label class="form-label" for="qtdGrupos">Quantidade de Grupos</label>
-              <input type="number" class="form-control" id="qtdGrupos" min="1" max="26" value="2">
-              <div class="form-text">Até 26 (A-Z).</div>
+              <label class="form-label" for="formatoCopa">Formato da copa</label>
+              <select class="form-select" id="formatoCopa">
+                <option value="groups">Grupos + mata-mata</option>
+                <option value="knockout">Só mata-mata (eliminatória)</option>
+              </select>
             </div>
 
-            <div class="mb-3">
-              <label class="form-label" for="qtdClassificados">Classificados por Grupo</label>
-              <input type="number" class="form-control" id="qtdClassificados" min="1" value="2">
+            <div id="groupsSetup">
+              <div class="mb-3">
+                <label class="form-label" for="qtdGrupos">Quantidade de Grupos</label>
+                <input type="number" class="form-control" id="qtdGrupos" min="1" max="26" value="2">
+                <div class="form-text">Até 26 (A-Z).</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="qtdClassificados">Classificados por Grupo</label>
+                <input type="number" class="form-control" id="qtdClassificados" min="1" value="2">
+              </div>
             </div>
 
             <div class="mb-3">
@@ -64,12 +74,14 @@
               <button class="btn btn-warning" id="generateCupGroups" type="button">
                 Sortear Grupos e Gerar Fase de Grupos
               </button>
+              <button class="btn btn-warning d-none" id="generateDirectKnockout" type="button">
+                Sortear Chave e Gerar Mata-Mata
+              </button>
             </div>
 
             <hr>
-            <div class="small text-muted">
-              Fase de grupos: round-robin ida e volta (1 jogo por confronto). O formato MD1/MD3 acima vale só para o mata-mata.
-              Ao sortear novamente, o backend atualiza `participants.grupo` e recria `tournament_matches` da fase de grupos.
+            <div class="small text-muted" id="setupHint">
+              Fase de grupos: round-robin ida e volta (1 jogo por confronto). O formato MD1/MD3 acima vale para o mata-mata.
             </div>
           </div>
         </div>
@@ -79,7 +91,7 @@
         <div class="card">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
-              <h4 class="m-0">Distribuição</h4>
+              <h4 class="m-0">Inscritos</h4>
               <button class="btn btn-outline-primary btn-sm" id="refreshParticipants" type="button">Atualizar</button>
             </div>
 
@@ -97,4 +109,3 @@
   <script src="../assets/js/sorteioGrupos.js"></script>
 </body>
 </html>
-

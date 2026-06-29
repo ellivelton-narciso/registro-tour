@@ -191,6 +191,7 @@ CREATE TABLE IF NOT EXISTS tournaments (
     qtdGrupos INT DEFAULT 2,
     qtdClassificados INT DEFAULT 2,
     formatoMataMata SMALLINT DEFAULT 3,
+    formatoCopa VARCHAR(20) DEFAULT 'groups',
     dateStart DATE DEFAULT CURRENT_DATE,
     dateEnd DATE DEFAULT NULL
 );

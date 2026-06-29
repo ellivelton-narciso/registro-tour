@@ -4,6 +4,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const PHASE_LABELS = {
     groups: 'Grupos',
+    r128: 'Round 128',
+    r64: 'Round 64',
+    r32: 'Round 32',
     r16: 'Oitavas',
     qf: 'Quartas',
     sf: 'Semifinal',
@@ -40,9 +43,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       `${data.tournamentName || 'Torneio'} (ID ${data.tournamentId})`;
 
     const g = data.groups;
-    document.getElementById('groupsStatus').textContent =
-      `Grupos: ${g.completed}/${g.total} concluídos` +
-      (g.complete ? ' ✓' : ` (${g.pending} pendentes)`);
+    if (data.formatoCopa === 'knockout') {
+      document.getElementById('groupsStatus').textContent = 'Formato: só mata-mata (sem grupos)';
+    } else {
+      document.getElementById('groupsStatus').textContent =
+        `Grupos: ${g.completed}/${g.total} concluídos` +
+        (g.complete ? ' ✓' : ` (${g.pending} pendentes)`);
+    }
 
     let koText = 'Mata-mata: não gerado';
     if (data.knockout.hasKnockout) {
@@ -51,6 +58,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       );
       koText = `Mata-mata: ${parts.join(' · ')}`;
       if (data.knockout.cupFinished) koText += ' — campeão definido';
+    } else if (data.formatoCopa === 'knockout' && data.canGenerateKnockout) {
+      koText = 'Mata-mata: aguardando sorteio da chave';
     }
     document.getElementById('knockoutStatus').textContent = koText;
 

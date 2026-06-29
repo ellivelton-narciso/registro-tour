@@ -194,12 +194,15 @@ app.get('/public/cupStandings', async (req, res) => {
         AND tm.phase <> 'groups'
       ORDER BY
         CASE tm.phase
-          WHEN 'r16' THEN 1
-          WHEN 'qf' THEN 2
-          WHEN 'sf' THEN 3
-          WHEN '3p' THEN 4
-          WHEN 'final' THEN 5
-          ELSE 6
+          WHEN 'r128' THEN 1
+          WHEN 'r64' THEN 2
+          WHEN 'r32' THEN 3
+          WHEN 'r16' THEN 4
+          WHEN 'qf' THEN 5
+          WHEN 'sf' THEN 6
+          WHEN '3p' THEN 7
+          WHEN 'final' THEN 8
+          ELSE 9
         END,
         tm.id
       `,
@@ -415,6 +418,71 @@ function parseFormatoMataMata(value) {
   return null;
 }
 
+function parseFormatoCopa(value) {
+  const normalized = String(value ?? 'groups').trim().toLowerCase();
+  if (normalized === 'groups' || normalized === 'knockout') return normalized;
+  return null;
+}
+
+function readFormatoCopa(row) {
+  return row?.formatocopa ?? row?.formatoCopa ?? 'groups';
+}
+
+async function runDirectKnockoutGeneration(client, tournamentId, formatoMataMata) {
+  const existingMatches = await client.query(
+    'SELECT COUNT(*)::int AS n FROM tournament_matches WHERE tournament_id = $1',
+    [tournamentId]
+  );
+  if (existingMatches.rows[0].n > 0) {
+    await client.query('DELETE FROM tournament_matches WHERE tournament_id = $1', [tournamentId]);
+  }
+
+  await client.query(
+    `UPDATE tournaments SET formatoCopa = 'knockout', formatoMataMata = $1 WHERE id = $2`,
+    [formatoMataMata, tournamentId]
+  );
+
+  const playerIds = await cupKnockout.fetchAllParticipantPlayerIds(client, tournamentId);
+  if (playerIds.length < 2) {
+    throw new Error('Mínimo de 2 inscritos para gerar o mata-mata.');
+  }
+
+  const bracketRound = cupKnockout.buildDirectKnockoutRound(playerIds);
+  const { pairings, byes, totalSlots, playerCount } = bracketRound;
+
+  if (pairings.length === 0 && byes.length === 0) {
+    throw new Error('Não foi possível montar a chave do mata-mata.');
+  }
+
+  const phase = cupKnockout.knockoutPhaseForBracketSize(totalSlots);
+  if (!phase) {
+    throw new Error('Quantidade de inscritos não suportada para chave (máx. 128).');
+  }
+
+  const created = await cupKnockout.insertKnockoutRound(
+    client,
+    tournamentId,
+    pairings,
+    formatoMataMata,
+    phase
+  );
+  const byeMatchIds = await cupKnockout.insertKnockoutByes(
+    client,
+    tournamentId,
+    byes,
+    phase
+  );
+
+  return {
+    phase,
+    playerCount,
+    totalSlots,
+    qtdConfrontos: created.length,
+    qtdByes: byeMatchIds.length,
+    matchIds: [...created, ...byeMatchIds]
+  };
+}
+
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 app.get('/getCupSetup', auth, async (req, res) => {
@@ -425,7 +493,7 @@ app.get('/getCupSetup', auth, async (req, res) => {
 
   try {
     const tournamentResult = await pool.query(
-      'SELECT qtdGrupos, qtdClassificados, formatoMataMata FROM tournaments WHERE id = $1',
+      'SELECT qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa FROM tournaments WHERE id = $1',
       [id]
     );
     if (tournamentResult.rows.length === 0) {
@@ -439,6 +507,7 @@ app.get('/getCupSetup', auth, async (req, res) => {
 
     return res.status(200).json({
       ...tournamentResult.rows[0],
+      formatoCopa: readFormatoCopa(tournamentResult.rows[0]),
       ...participantsResult.rows[0]
     });
   } catch (err) {
@@ -482,38 +551,62 @@ app.post('/updateCupSetup', auth, async (req, res) => {
     tournamentId,
     qtdGrupos,
     qtdClassificados,
-    formatoMataMata
+    formatoMataMata,
+    formatoCopa
   } = req.body;
 
   if (!tournamentId) return res.status(400).json({ error: 'tournamentId é obrigatório.' });
 
-  const parsedQtdGrupos = parsePositiveInt(qtdGrupos);
-  const parsedQtdClassificados = parsePositiveInt(qtdClassificados);
+  const parsedFormatoCopa = parseFormatoCopa(formatoCopa ?? 'groups');
   const parsedFormatoMataMata = parseFormatoMataMata(formatoMataMata);
 
-  if (!parsedQtdGrupos || parsedQtdGrupos > 26) {
-    return res.status(400).json({ error: 'qtdGrupos deve ser um inteiro positivo entre 1 e 26.' });
-  }
-  if (!parsedQtdClassificados) {
-    return res.status(400).json({ error: 'qtdClassificados deve ser um inteiro positivo.' });
+  if (!parsedFormatoCopa) {
+    return res.status(400).json({ error: 'formatoCopa deve ser "groups" ou "knockout".' });
   }
   if (!parsedFormatoMataMata) {
     return res.status(400).json({ error: 'formatoMataMata deve ser 1 (MD1) ou 3 (MD3).' });
   }
 
+  let parsedQtdGrupos = null;
+  let parsedQtdClassificados = null;
+  if (parsedFormatoCopa === 'groups') {
+    parsedQtdGrupos = parsePositiveInt(qtdGrupos);
+    parsedQtdClassificados = parsePositiveInt(qtdClassificados);
+    if (!parsedQtdGrupos || parsedQtdGrupos > 26) {
+      return res.status(400).json({ error: 'qtdGrupos deve ser um inteiro positivo entre 1 e 26.' });
+    }
+    if (!parsedQtdClassificados) {
+      return res.status(400).json({ error: 'qtdClassificados deve ser um inteiro positivo.' });
+    }
+  }
+
   try {
-    const result = await pool.query(
-      `
-      UPDATE tournaments
-      SET
-        qtdGrupos = $1,
-        qtdClassificados = $2,
-        formatoMataMata = $3
-      WHERE id = $4
-      RETURNING qtdGrupos, qtdClassificados, formatoMataMata
-      `,
-      [parsedQtdGrupos, parsedQtdClassificados, parsedFormatoMataMata, tournamentId]
-    );
+    let result;
+    if (parsedFormatoCopa === 'knockout') {
+      result = await pool.query(
+        `
+        UPDATE tournaments
+        SET formatoCopa = $1, formatoMataMata = $2
+        WHERE id = $3
+        RETURNING qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa
+        `,
+        [parsedFormatoCopa, parsedFormatoMataMata, tournamentId]
+      );
+    } else {
+      result = await pool.query(
+        `
+        UPDATE tournaments
+        SET
+          qtdGrupos = $1,
+          qtdClassificados = $2,
+          formatoMataMata = $3,
+          formatoCopa = $4
+        WHERE id = $5
+        RETURNING qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa
+        `,
+        [parsedQtdGrupos, parsedQtdClassificados, parsedFormatoMataMata, parsedFormatoCopa, tournamentId]
+      );
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Torneio não encontrado.' });
@@ -578,7 +671,8 @@ app.post('/generateCupGroups', auth, async (req, res) => {
       SET
         qtdGrupos = $1,
         qtdClassificados = $2,
-        formatoMataMata = $3
+        formatoMataMata = $3,
+        formatoCopa = 'groups'
       WHERE id = $4
       `,
       [qtdGruposFinal, qtdClassificadosFinal, formatoMataMataFinal, parsedTournamentId]
@@ -759,13 +853,21 @@ app.get('/getCupStatus', auth, async (req, res) => {
 
   try {
     const tournamentRes = await pool.query(
-      'SELECT id, name, qtdGrupos, qtdClassificados, formatoMataMata, dateend FROM tournaments WHERE id = $1',
+      'SELECT id, name, qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa, dateend FROM tournaments WHERE id = $1',
       [id]
     );
     if (tournamentRes.rows.length === 0) {
       return res.status(404).json({ error: 'Torneio não encontrado.' });
     }
     const tournament = tournamentRes.rows[0];
+    const formatoCopa = readFormatoCopa(tournament);
+    const knockoutOnly = formatoCopa === 'knockout';
+
+    const participantsCountRes = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM participants WHERE tournaments_id = $1',
+      [id]
+    );
+    const qtdParticipantes = participantsCountRes.rows[0].n;
 
     const groupStatsRes = await pool.query(
       `
@@ -850,6 +952,8 @@ app.get('/getCupStatus', auth, async (req, res) => {
     return res.status(200).json({
       tournamentId: id,
       tournamentName: tournament.name,
+      formatoCopa,
+      qtdParticipantes,
       qtdGrupos: tournament.qtdgrupos ?? tournament.qtdGrupos,
       qtdClassificados: tournament.qtdclassificados ?? tournament.qtdClassificados,
       formatoMataMata: tournament.formatomatamata ?? tournament.formatoMataMata,
@@ -867,7 +971,9 @@ app.get('/getCupStatus', auth, async (req, res) => {
         latestComplete: latestKnockoutComplete,
         cupFinished: hasFinalWinner.rows[0].n > 0
       },
-      canGenerateKnockout: groupsComplete && !hasKnockout,
+      canGenerateKnockout: knockoutOnly
+        ? !hasKnockout && qtdParticipantes >= 2
+        : groupsComplete && !hasKnockout,
       canAdvanceKnockout:
         hasKnockout &&
         latestKnockoutComplete &&
@@ -937,12 +1043,15 @@ app.get('/getTournamentMatches', auth, async (req, res) => {
       ORDER BY
         CASE tm.phase
           WHEN 'groups' THEN 0
-          WHEN 'r16' THEN 1
-          WHEN 'qf' THEN 2
-          WHEN 'sf' THEN 3
-          WHEN '3p' THEN 4
-          WHEN 'final' THEN 5
-          ELSE 6
+          WHEN 'r128' THEN 1
+          WHEN 'r64' THEN 2
+          WHEN 'r32' THEN 3
+          WHEN 'r16' THEN 4
+          WHEN 'qf' THEN 5
+          WHEN 'sf' THEN 6
+          WHEN '3p' THEN 7
+          WHEN 'final' THEN 8
+          ELSE 9
         END,
         tm.grupo NULLS LAST,
         tm.id
@@ -957,6 +1066,58 @@ app.get('/getTournamentMatches', auth, async (req, res) => {
   }
 });
 
+app.post('/generateDirectKnockout', auth, async (req, res) => {
+  const tournamentId = parsePositiveInt(req.body.tournamentId);
+  if (!tournamentId) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  const parsedFormatoMataMata =
+    req.body.formatoMataMata !== undefined
+      ? parseFormatoMataMata(req.body.formatoMataMata)
+      : null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const tournamentRes = await client.query(
+      'SELECT formatoMataMata FROM tournaments WHERE id = $1 FOR UPDATE',
+      [tournamentId]
+    );
+    if (tournamentRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    const formatoMataMata =
+      parsedFormatoMataMata ??
+      tournamentRes.rows[0].formatomatamata ??
+      tournamentRes.rows[0].formatoMataMata ??
+      1;
+
+    if (formatoMataMata !== 1 && formatoMataMata !== 3) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'formatoMataMata inválido.' });
+    }
+
+    const result = await runDirectKnockoutGeneration(client, tournamentId, formatoMataMata);
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: 'Chave eliminatória gerada com sucesso!',
+      formatoCopa: 'knockout',
+      ...result
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    const message = err.message || 'Erro ao gerar mata-mata direto.';
+    return res.status(err.message?.includes('Mínimo') ? 400 : 500).json({ error: message });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/generateKnockout', auth, async (req, res) => {
   const tournamentId = parsePositiveInt(req.body.tournamentId);
   if (!tournamentId) return res.status(400).json({ error: 'tournamentId inválido.' });
@@ -966,7 +1127,7 @@ app.post('/generateKnockout', auth, async (req, res) => {
     await client.query('BEGIN');
 
     const tournamentRes = await client.query(
-      'SELECT qtdClassificados, formatoMataMata FROM tournaments WHERE id = $1 FOR UPDATE',
+      'SELECT qtdClassificados, formatoMataMata, formatoCopa FROM tournaments WHERE id = $1 FOR UPDATE',
       [tournamentId]
     );
     if (tournamentRes.rows.length === 0) {
@@ -978,6 +1139,17 @@ app.post('/generateKnockout', auth, async (req, res) => {
       tournamentRes.rows[0].qtdclassificados ?? tournamentRes.rows[0].qtdClassificados;
     const formatoMataMata =
       tournamentRes.rows[0].formatomatamata ?? tournamentRes.rows[0].formatoMataMata;
+    const formatoCopa = readFormatoCopa(tournamentRes.rows[0]);
+
+    if (formatoCopa === 'knockout') {
+      const result = await runDirectKnockoutGeneration(client, tournamentId, formatoMataMata);
+      await client.query('COMMIT');
+      return res.status(200).json({
+        message: 'Chave eliminatória gerada com sucesso!',
+        formatoCopa: 'knockout',
+        ...result
+      });
+    }
 
     const pendingGroups = await client.query(
       `
@@ -1037,7 +1209,7 @@ app.post('/generateKnockout', auth, async (req, res) => {
       return res.status(400).json({ error: 'Não foi possível montar confrontos do mata-mata.' });
     }
 
-    const phase = cupKnockout.knockoutPhaseForPlayers(totalSlots);
+    const phase = cupKnockout.knockoutPhaseForBracketSize(totalSlots);
     if (!phase) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Quantidade de classificados não suportada para chave.' });
