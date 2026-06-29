@@ -3,10 +3,11 @@
     r16: 'Oitavas',
     qf: 'Quartas',
     sf: 'Semifinal',
+    '3p': '3º lugar',
     final: 'Final'
   };
 
-  const PHASE_ORDER = ['r16', 'qf', 'sf', 'final'];
+  const PHASE_ORDER = ['r16', 'qf', 'sf', '3p', 'final'];
 
   function groupKnockoutMatches(matches) {
     const byPhase = {};
@@ -62,7 +63,12 @@
     if (match.winner_name) {
       const badge = document.createElement('div');
       badge.className = 'cup-bracket-winner-badge';
-      badge.textContent = match.phase === 'final' ? `🏆 ${match.winner_name}` : match.winner_name;
+      badge.textContent =
+        match.phase === 'final'
+          ? `🏆 ${match.winner_name}`
+          : match.phase === '3p'
+            ? `🥉 ${match.winner_name}`
+            : match.winner_name;
       card.appendChild(badge);
     }
 

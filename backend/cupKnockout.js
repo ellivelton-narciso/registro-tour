@@ -11,7 +11,8 @@ const KNOCKOUT_PHASE_ORDER = {
   r16: 1,
   qf: 2,
   sf: 3,
-  final: 4
+  '3p': 4,
+  final: 5
 };
 
 function isPowerOfTwo(n) {
@@ -36,6 +37,14 @@ function knockoutPhaseForPlayers(count) {
 function nextKnockoutPhase(phase) {
   const map = { r16: 'qf', qf: 'sf', sf: 'final' };
   return map[phase] || null;
+}
+
+function buildThirdPlacePairing(semifinalMatches) {
+  const losers = semifinalMatches.map((match) =>
+    match.winner_id === match.player_a_id ? match.player_b_id : match.player_a_id
+  );
+  if (losers.length !== 2) return [];
+  return [[losers[0], losers[1]]];
 }
 
 function phaseSortKey(phase) {
@@ -268,5 +277,6 @@ module.exports = {
   fetchGroupStandings,
   rebuildParticipantStats,
   insertKnockoutRound,
-  insertKnockoutByes
+  insertKnockoutByes,
+  buildThirdPlacePairing
 };

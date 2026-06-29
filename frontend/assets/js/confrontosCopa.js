@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     r16: 'Oitavas',
     qf: 'Quartas',
     sf: 'Semifinal',
+    '3p': '3º lugar',
     final: 'Final'
   };
 
@@ -55,6 +56,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('btnGenerateKnockout').disabled = !data.canGenerateKnockout;
     document.getElementById('btnAdvanceKnockout').disabled = !data.canAdvanceKnockout;
+
+    const btnThirdPlace = document.getElementById('btnGenerateThirdPlace');
+    if (data.canGenerateThirdPlace) {
+      btnThirdPlace.classList.remove('d-none');
+      btnThirdPlace.disabled = false;
+    } else {
+      btnThirdPlace.classList.add('d-none');
+      btnThirdPlace.disabled = true;
+    }
 
     qtdClassificados = data.qtdClassificados ?? 2;
 
@@ -264,6 +274,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshAll();
   }
 
+  async function generateThirdPlace() {
+    const confirmRes = await Swal.fire({
+      icon: 'question',
+      title: 'Gerar disputa de 3º lugar?',
+      text: 'Os perdedores das semifinais disputarão o 3º lugar.',
+      showCancelButton: true,
+      confirmButtonText: 'Gerar',
+      cancelButtonText: 'Cancelar'
+    });
+    if (!confirmRes.isConfirmed) return;
+
+    const res = await fetch(`${urlBE}/generateThirdPlace`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ tournamentId: currentTournamentId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao gerar 3º lugar.');
+
+    Swal.fire({ icon: 'success', title: '3º lugar gerado', text: data.message });
+    await refreshAll();
+  }
+
   async function refreshAll() {
     await loadStatus();
     await loadStandings();
@@ -281,6 +314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnClearFilters').addEventListener('click', clearFilters);
     document.getElementById('btnGenerateKnockout').addEventListener('click', () => generateKnockout().catch(showErr));
     document.getElementById('btnAdvanceKnockout').addEventListener('click', () => advanceKnockout().catch(showErr));
+    document.getElementById('btnGenerateThirdPlace').addEventListener('click', () => generateThirdPlace().catch(showErr));
   } catch (err) {
     showErr(err);
   }

@@ -197,8 +197,9 @@ app.get('/public/cupStandings', async (req, res) => {
           WHEN 'r16' THEN 1
           WHEN 'qf' THEN 2
           WHEN 'sf' THEN 3
-          WHEN 'final' THEN 4
-          ELSE 5
+          WHEN '3p' THEN 4
+          WHEN 'final' THEN 5
+          ELSE 6
         END,
         tm.id
       `,
@@ -815,6 +816,37 @@ app.get('/getCupStatus', auth, async (req, res) => {
       [id]
     );
 
+    const hasFinalRes = await pool.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = 'final'
+      `,
+      [id]
+    );
+    const hasThirdPlaceRes = await pool.query(
+      `
+      SELECT COUNT(*)::int AS n
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = '3p'
+      `,
+      [id]
+    );
+    const sfStatsRes = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE winner_id IS NOT NULL)::int AS completed
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = 'sf'
+      `,
+      [id]
+    );
+    const sfStats = sfStatsRes.rows[0];
+    const sfComplete = sfStats.total > 0 && sfStats.completed === sfStats.total;
+    const hasFinal = hasFinalRes.rows[0].n > 0;
+    const hasThirdPlace = hasThirdPlaceRes.rows[0].n > 0;
+
     return res.status(200).json({
       tournamentId: id,
       tournamentName: tournament.name,
@@ -840,7 +872,8 @@ app.get('/getCupStatus', auth, async (req, res) => {
         hasKnockout &&
         latestKnockoutComplete &&
         latestKnockout?.phase !== 'final' &&
-        hasFinalWinner.rows[0].n === 0
+        hasFinalWinner.rows[0].n === 0,
+      canGenerateThirdPlace: sfComplete && hasFinal && !hasThirdPlace
     });
   } catch (err) {
     console.error(err);
@@ -907,8 +940,9 @@ app.get('/getTournamentMatches', auth, async (req, res) => {
           WHEN 'r16' THEN 1
           WHEN 'qf' THEN 2
           WHEN 'sf' THEN 3
-          WHEN 'final' THEN 4
-          ELSE 5
+          WHEN '3p' THEN 4
+          WHEN 'final' THEN 5
+          ELSE 6
         END,
         tm.grupo NULLS LAST,
         tm.id
@@ -1100,7 +1134,7 @@ app.post('/advanceKnockout', auth, async (req, res) => {
 
     const winnersRes = await client.query(
       `
-      SELECT winner_id
+      SELECT player_a_id, player_b_id, winner_id
       FROM tournament_matches
       WHERE tournament_id = $1 AND phase = $2 AND winner_id IS NOT NULL
       ORDER BY id
@@ -1127,18 +1161,120 @@ app.post('/advanceKnockout', auth, async (req, res) => {
       nextPhase
     );
 
+    let thirdPlaceMatchIds = [];
+    if (latest.phase === 'sf') {
+      const thirdPlacePairings = cupKnockout.buildThirdPlacePairing(winnersRes.rows);
+      if (thirdPlacePairings.length > 0) {
+        thirdPlaceMatchIds = await cupKnockout.insertKnockoutRound(
+          client,
+          tournamentId,
+          thirdPlacePairings,
+          formatoMataMata,
+          '3p'
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    const extra =
+      thirdPlaceMatchIds.length > 0 ? ' Disputa de 3º lugar também gerada.' : '';
+
+    return res.status(200).json({
+      message: `Rodada ${nextPhase} gerada com sucesso!${extra}`,
+      phase: nextPhase,
+      qtdConfrontos: created.length,
+      qtdThirdPlace: thirdPlaceMatchIds.length,
+      matchIds: [...created, ...thirdPlaceMatchIds]
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao avançar mata-mata.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/generateThirdPlace', auth, async (req, res) => {
+  const tournamentId = parsePositiveInt(req.body.tournamentId);
+  if (!tournamentId) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const tournamentRes = await client.query(
+      'SELECT formatoMataMata FROM tournaments WHERE id = $1 FOR UPDATE',
+      [tournamentId]
+    );
+    if (tournamentRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+    const formatoMataMata =
+      tournamentRes.rows[0].formatomatamata ?? tournamentRes.rows[0].formatoMataMata;
+
+    const existing3p = await client.query(
+      `SELECT COUNT(*)::int AS n FROM tournament_matches
+       WHERE tournament_id = $1 AND phase = '3p'`,
+      [tournamentId]
+    );
+    if (existing3p.rows[0].n > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'A disputa de 3º lugar já existe.' });
+    }
+
+    const hasFinal = await client.query(
+      `SELECT COUNT(*)::int AS n FROM tournament_matches
+       WHERE tournament_id = $1 AND phase = 'final'`,
+      [tournamentId]
+    );
+    if (hasFinal.rows[0].n === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'A final ainda não foi gerada.' });
+    }
+
+    const sfRes = await client.query(
+      `
+      SELECT player_a_id, player_b_id, winner_id
+      FROM tournament_matches
+      WHERE tournament_id = $1 AND phase = 'sf' AND winner_id IS NOT NULL
+      ORDER BY id
+      `,
+      [tournamentId]
+    );
+    if (sfRes.rows.length < 2) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Semifinais incompletas ou inexistentes.' });
+    }
+
+    const thirdPlacePairings = cupKnockout.buildThirdPlacePairing(sfRes.rows);
+    if (thirdPlacePairings.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Não foi possível montar a disputa de 3º lugar.' });
+    }
+
+    const created = await cupKnockout.insertKnockoutRound(
+      client,
+      tournamentId,
+      thirdPlacePairings,
+      formatoMataMata,
+      '3p'
+    );
+
     await client.query('COMMIT');
 
     return res.status(200).json({
-      message: `Rodada ${nextPhase} gerada com sucesso!`,
-      phase: nextPhase,
+      message: 'Disputa de 3º lugar gerada com sucesso!',
+      phase: '3p',
       qtdConfrontos: created.length,
       matchIds: created
     });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
-    return res.status(500).json({ error: 'Erro ao avançar mata-mata.' });
+    return res.status(500).json({ error: 'Erro ao gerar disputa de 3º lugar.' });
   } finally {
     client.release();
   }
