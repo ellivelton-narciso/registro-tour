@@ -10,6 +10,7 @@ import Swal from 'sweetalert2';
 import { API_URL, apiFetch } from '../../api/client';
 import type { Trainer, TournamentConfig } from '../../api/types';
 import { AdminNav } from '../../components/AdminNav';
+import { AdminStatCard, IconList, IconUsers } from '../../components/AdminStatCard';
 
 const trainerHelper = createColumnHelper<Trainer>();
 const rankHelper = createColumnHelper<{ pos: number; pokemon: string; count: number }>();
@@ -18,6 +19,8 @@ export function ParticipantsPage() {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [tournamentId, setTournamentId] = useState<number | null>(null);
   const [championsMode, setChampionsMode] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [showRanking, setShowRanking] = useState(false);
 
   const load = useCallback(async () => {
     const cfg = await apiFetch<TournamentConfig>('/getConfig', { auth: true });
@@ -87,9 +90,9 @@ export function ParticipantsPage() {
 
   const rankColumns = useMemo(
     () => [
-      rankHelper.accessor('pos', { header: '#' }),
+      rankHelper.accessor('pos', { header: 'Posição' }),
       rankHelper.accessor('pokemon', { header: 'Pokémon' }),
-      rankHelper.accessor('count', { header: 'Escolhas' }),
+      rankHelper.accessor('count', { header: 'Qtd Escolhas' }),
     ],
     []
   );
@@ -127,7 +130,7 @@ export function ParticipantsPage() {
   function renderTable<T>(table: ReturnType<typeof useReactTable<T>>) {
     return (
       <div className="table-responsive">
-        <table className="table table-striped table-hover">
+        <table className="table table-striped table-hover mb-0">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
@@ -155,37 +158,69 @@ export function ParticipantsPage() {
     <>
       <AdminNav />
       <div className="container mt-4 mb-5">
-        <div className="row pt-1 mb-4">
-          <div className="col-sm-6 col-12">
-            <div className="card">
-              <div className="card-body text-end">
-                <h3>{trainers.length}</h3>
-                <span>Quantidade Registros</span>
-              </div>
-            </div>
+        <section className="row pt-1 g-3 mb-4">
+          <div className={championsMode ? 'col-sm-6 col-lg-4' : 'col-sm-6 col-12'}>
+            <AdminStatCard
+              variant="primary"
+              icon={<IconUsers />}
+              value={trainers.length}
+              label="Quantidade Registros"
+            />
           </div>
           {!championsMode && (
             <div className="col-sm-6 col-12">
-              <div className="card">
-                <div className="card-body text-end">
-                  <h3>{uniquePokemon}</h3>
-                  <span>Pokémon diferentes</span>
-                </div>
-              </div>
+              <AdminStatCard
+                variant="warning"
+                icon={<IconList />}
+                value={uniquePokemon}
+                label="Pokémon diferentes"
+              />
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h2 className="mb-0">Lista de Participantes</h2>
-          <button type="button" className="btn btn-danger" onClick={resetAll}>Resetar Todos</button>
-        </div>
-        {renderTable(trainerTable)}
+        <section className="card mb-4">
+          <div className="card-header d-flex flex-wrap align-items-center gap-2">
+            <h4 className="flex-grow-1 mb-0">Lista de Participantes</h4>
+            <div className="d-flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setShowParticipants((v) => !v)}
+              >
+                {showParticipants ? 'Ocultar Tabela' : 'Mostrar Tabela de Participantes'}
+              </button>
+              <button type="button" className="btn btn-danger btn-sm" onClick={resetAll}>
+                Resetar Participantes
+              </button>
+            </div>
+          </div>
+          {showParticipants && (
+            <div className="card-body border-top">
+              {trainers.length === 0 ? (
+                <p className="text-muted mb-0">Nenhum participante inscrito ainda.</p>
+              ) : (
+                renderTable(trainerTable)
+              )}
+            </div>
+          )}
+        </section>
 
         {!championsMode && ranking.length > 0 && (
-          <section className="mt-5">
-            <h2>Ranking de Pokémon</h2>
-            {renderTable(rankTable)}
+          <section className="card">
+            <div className="card-header d-flex flex-wrap align-items-center gap-2">
+              <h4 className="flex-grow-1 mb-0">Ranking de Pokémon mais escolhidos</h4>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setShowRanking((v) => !v)}
+              >
+                {showRanking ? 'Ocultar Ranking' : 'Mostrar Ranking'}
+              </button>
+            </div>
+            {showRanking && (
+              <div className="card-body border-top">{renderTable(rankTable)}</div>
+            )}
           </section>
         )}
       </div>
