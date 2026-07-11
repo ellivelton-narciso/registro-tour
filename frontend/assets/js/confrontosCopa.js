@@ -32,6 +32,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return cfg.id;
   }
 
+  function phaseLabel(phase) {
+    if (PHASE_LABELS[phase]) return PHASE_LABELS[phase];
+    if (typeof phase === 'string' && phase.startsWith('swiss_')) {
+      const round = phase.replace('swiss_', '');
+      return `Suíço R${round}`;
+    }
+    return phase;
+  }
+
   async function loadStatus() {
     const res = await fetch(`${urlBE}/getCupStatus?tournamentId=${currentTournamentId}`, {
       headers: authHeaders()
@@ -45,6 +54,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const g = data.groups;
     if (data.formatoCopa === 'knockout') {
       document.getElementById('groupsStatus').textContent = 'Formato: só mata-mata (sem grupos)';
+    } else if (data.formatoCopa === 'swiss') {
+      const swiss = data.swiss;
+      if (!swiss?.rounds?.length) {
+        document.getElementById('groupsStatus').textContent = 'Suíço: aguardando primeira rodada';
+      } else {
+        const parts = swiss.rounds.map(
+          (r) => `${phaseLabel(r.phase)} ${r.completed}/${r.total}`
+        );
+        document.getElementById('groupsStatus').textContent =
+          `Suíço: ${parts.join(' · ')}` + (swiss.complete ? ' ✓' : '');
+      }
     } else {
       document.getElementById('groupsStatus').textContent =
         `Grupos: ${g.completed}/${g.total} concluídos` +
@@ -54,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let koText = 'Mata-mata: não gerado';
     if (data.knockout.hasKnockout) {
       const parts = data.knockout.rounds.map(
-        (r) => `${PHASE_LABELS[r.phase] || r.phase} ${r.completed}/${r.total}`
+        (r) => `${phaseLabel(r.phase)} ${r.completed}/${r.total}`
       );
       koText = `Mata-mata: ${parts.join(' · ')}`;
       if (data.knockout.cupFinished) koText += ' — campeão definido';

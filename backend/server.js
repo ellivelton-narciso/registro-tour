@@ -6,6 +6,7 @@ const axios = require('axios');
 const pool = require('./db/connection');
 const auth = require('./authMiddleware');
 const cupKnockout = require('./cupKnockout');
+const cupSwiss = require('./cupSwiss');
 const tournamentFees = require('./tournamentFees');
 const { upload, getTeamImagesDir, isChampionsGen, resolveTeamImagePath } = require('./championsUpload');
 const { sendChampionsTeamsToDiscord } = require('./championsDiscord');
@@ -178,7 +179,7 @@ app.get('/public/cupStandings', async (req, res) => {
   try {
     const tournamentRes = await client.query(
       `
-      SELECT id, name, titulo2, qtdClassificados, dateEnd
+      SELECT id, name, titulo2, qtdClassificados, formatoCopa, dateEnd
       FROM tournaments
       WHERE dateEnd IS NULL
       ORDER BY dateStart DESC, id DESC
@@ -194,12 +195,24 @@ app.get('/public/cupStandings', async (req, res) => {
     const tournamentId = tournament.id;
     const qtdClassificados =
       tournament.qtdclassificados ?? tournament.qtdClassificados ?? 2;
+    const formatoCopa = readFormatoCopa(tournament);
 
-    const { standings } = await cupKnockout.fetchGroupStandings(
-      client,
-      tournamentId,
-      qtdClassificados
-    );
+    let standings = [];
+    let hasGroups = false;
+
+    if (formatoCopa === 'swiss') {
+      const swissData = await cupSwiss.fetchSwissStandings(client, tournamentId, qtdClassificados);
+      standings = swissData.standings;
+      hasGroups = standings.length > 0 && (await cupSwiss.getSwissState(client, tournamentId)).hasSwiss;
+    } else {
+      const groupData = await cupKnockout.fetchGroupStandings(
+        client,
+        tournamentId,
+        qtdClassificados
+      );
+      standings = groupData.standings;
+      hasGroups = standings.length > 0;
+    }
 
     const knockoutRes = await client.query(
       `
@@ -220,6 +233,7 @@ app.get('/public/cupStandings', async (req, res) => {
       JOIN players pb ON pb.id = tm.player_b_id
       LEFT JOIN players pw ON pw.id = tm.winner_id
       WHERE tm.tournament_id = $1
+        AND tm.phase NOT LIKE 'swiss_%'
         AND tm.phase <> 'groups'
       ORDER BY
         CASE tm.phase
@@ -252,8 +266,9 @@ app.get('/public/cupStandings', async (req, res) => {
       tournamentId,
       tournamentName: tournament.name,
       titulo2: tournament.titulo2,
+      formatoCopa,
       qtdClassificados,
-      hasGroups: standings.length > 0,
+      hasGroups,
       standings,
       knockout: {
         hasKnockout: knockoutRes.rows.length > 0,
@@ -501,7 +516,7 @@ function parseFormatoMataMata(value) {
 
 function parseFormatoCopa(value) {
   const normalized = String(value ?? 'groups').trim().toLowerCase();
-  if (normalized === 'groups' || normalized === 'knockout') return normalized;
+  if (normalized === 'groups' || normalized === 'knockout' || normalized === 'swiss') return normalized;
   return null;
 }
 
@@ -574,7 +589,7 @@ app.get('/getCupSetup', auth, async (req, res) => {
 
   try {
     const tournamentResult = await pool.query(
-      'SELECT qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa FROM tournaments WHERE id = $1',
+      'SELECT qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa, qtdRodadasSuico FROM tournaments WHERE id = $1',
       [id]
     );
     if (tournamentResult.rows.length === 0) {
@@ -633,7 +648,8 @@ app.post('/updateCupSetup', auth, async (req, res) => {
     qtdGrupos,
     qtdClassificados,
     formatoMataMata,
-    formatoCopa
+    formatoCopa,
+    qtdRodadasSuico
   } = req.body;
 
   if (!tournamentId) return res.status(400).json({ error: 'tournamentId é obrigatório.' });
@@ -642,7 +658,7 @@ app.post('/updateCupSetup', auth, async (req, res) => {
   const parsedFormatoMataMata = parseFormatoMataMata(formatoMataMata);
 
   if (!parsedFormatoCopa) {
-    return res.status(400).json({ error: 'formatoCopa deve ser "groups" ou "knockout".' });
+    return res.status(400).json({ error: 'formatoCopa deve ser "groups", "knockout" ou "swiss".' });
   }
   if (!parsedFormatoMataMata) {
     return res.status(400).json({ error: 'formatoMataMata deve ser 1 (MD1) ou 3 (MD3).' });
@@ -650,6 +666,8 @@ app.post('/updateCupSetup', auth, async (req, res) => {
 
   let parsedQtdGrupos = null;
   let parsedQtdClassificados = null;
+  let parsedQtdRodadasSuico = null;
+
   if (parsedFormatoCopa === 'groups') {
     parsedQtdGrupos = parsePositiveInt(qtdGrupos);
     parsedQtdClassificados = parsePositiveInt(qtdClassificados);
@@ -658,6 +676,17 @@ app.post('/updateCupSetup', auth, async (req, res) => {
     }
     if (!parsedQtdClassificados) {
       return res.status(400).json({ error: 'qtdClassificados deve ser um inteiro positivo.' });
+    }
+  } else if (parsedFormatoCopa === 'swiss') {
+    parsedQtdClassificados = parsePositiveInt(qtdClassificados);
+    if (!parsedQtdClassificados) {
+      return res.status(400).json({ error: 'qtdClassificados deve ser um inteiro positivo (classificados para o mata-mata).' });
+    }
+    if (qtdRodadasSuico !== undefined && qtdRodadasSuico !== null && qtdRodadasSuico !== '') {
+      parsedQtdRodadasSuico = parsePositiveInt(qtdRodadasSuico);
+      if (!parsedQtdRodadasSuico || parsedQtdRodadasSuico > 12) {
+        return res.status(400).json({ error: 'qtdRodadasSuico deve ser entre 1 e 12.' });
+      }
     }
   }
 
@@ -669,9 +698,23 @@ app.post('/updateCupSetup', auth, async (req, res) => {
         UPDATE tournaments
         SET formatoCopa = $1, formatoMataMata = $2
         WHERE id = $3
-        RETURNING qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa
+        RETURNING qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa, qtdRodadasSuico
         `,
         [parsedFormatoCopa, parsedFormatoMataMata, tournamentId]
+      );
+    } else if (parsedFormatoCopa === 'swiss') {
+      result = await pool.query(
+        `
+        UPDATE tournaments
+        SET
+          qtdClassificados = $1,
+          formatoMataMata = $2,
+          formatoCopa = $3,
+          qtdRodadasSuico = $4
+        WHERE id = $5
+        RETURNING qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa, qtdRodadasSuico
+        `,
+        [parsedQtdClassificados, parsedFormatoMataMata, parsedFormatoCopa, parsedQtdRodadasSuico, tournamentId]
       );
     } else {
       result = await pool.query(
@@ -683,7 +726,7 @@ app.post('/updateCupSetup', auth, async (req, res) => {
           formatoMataMata = $3,
           formatoCopa = $4
         WHERE id = $5
-        RETURNING qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa
+        RETURNING qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa, qtdRodadasSuico
         `,
         [parsedQtdGrupos, parsedQtdClassificados, parsedFormatoMataMata, parsedFormatoCopa, tournamentId]
       );
@@ -928,13 +971,144 @@ app.post('/generateCupGroups', auth, async (req, res) => {
   }
 });
 
+app.post('/generateSwissRound', auth, async (req, res) => {
+  const parsedTournamentId = parsePositiveInt(req.body.tournamentId);
+  const reset = Boolean(req.body.reset);
+
+  if (!parsedTournamentId) return res.status(400).json({ error: 'tournamentId inválido.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const tournamentResult = await client.query(
+      'SELECT qtdClassificados, formatoMataMata, formatoCopa, qtdRodadasSuico FROM tournaments WHERE id = $1 FOR UPDATE',
+      [parsedTournamentId]
+    );
+
+    if (tournamentResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    const tournament = tournamentResult.rows[0];
+    const qtdClassificados =
+      tournament.qtdclassificados ?? tournament.qtdClassificados ?? 8;
+    const formatoMataMata =
+      tournament.formatomatamata ?? tournament.formatoMataMata ?? 3;
+    const qtdRodadasSuicoDb =
+      tournament.qtdrodadassuico ?? tournament.qtdRodadasSuico;
+
+    const participantsResult = await client.query(
+      'SELECT players_id FROM participants WHERE tournaments_id = $1 ORDER BY id',
+      [parsedTournamentId]
+    );
+    const playerIds = participantsResult.rows.map((row) => row.players_id);
+    const total = playerIds.length;
+
+    if (total < 2) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'São necessários pelo menos 2 participantes.' });
+    }
+
+    if (qtdClassificados > total) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'qtdClassificados não pode exceder o número de inscritos.' });
+    }
+
+    const totalRounds = cupSwiss.resolveSwissRounds(total, qtdRodadasSuicoDb);
+    const swissState = await cupSwiss.getSwissState(client, parsedTournamentId);
+
+    if (reset || !swissState.hasSwiss) {
+      await client.query(
+        `
+        UPDATE participants
+        SET grupo = NULL, pontos = 0, vitorias = 0, derrotas = 0, empates = 0, saldo = 0, posicao = NULL
+        WHERE tournaments_id = $1
+        `,
+        [parsedTournamentId]
+      );
+      await client.query('DELETE FROM tournament_matches WHERE tournament_id = $1', [parsedTournamentId]);
+      await client.query(
+        `UPDATE tournaments SET formatoCopa = 'swiss', formatoMataMata = $1, qtdClassificados = $2 WHERE id = $3`,
+        [formatoMataMata, qtdClassificados, parsedTournamentId]
+      );
+    } else if (!swissState.latestComplete) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'A rodada suíça atual ainda tem confrontos pendentes.' });
+    } else if (swissState.currentRound >= totalRounds) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Todas as rodadas suíças já foram geradas.' });
+    }
+
+    const roundNumber = reset || !swissState.hasSwiss ? 1 : swissState.nextRound;
+    const phase = cupSwiss.swissPhaseName(roundNumber);
+
+    let pairings = [];
+    let bye = null;
+
+    if (roundNumber === 1) {
+      ({ pairings, bye } = cupSwiss.pairSwissRound1(playerIds));
+    } else {
+      await cupSwiss.rebuildSwissStats(client, parsedTournamentId);
+      const standings = await cupSwiss.fetchSwissParticipantRows(client, parsedTournamentId);
+      const playedPairs = await cupSwiss.fetchPlayedPairs(client, parsedTournamentId);
+      ({ pairings, bye } = cupSwiss.pairSwissRoundNext(standings, playedPairs));
+    }
+
+    const createdMatches = [];
+    for (const [playerAId, playerBId] of pairings) {
+      const matchId = await cupSwiss.insertSwissMatch(
+        client,
+        parsedTournamentId,
+        playerAId,
+        playerBId,
+        phase
+      );
+      createdMatches.push(matchId);
+    }
+
+    if (bye) {
+      const byeId = await cupSwiss.insertSwissBye(client, parsedTournamentId, bye, phase);
+      createdMatches.push(byeId);
+      await client.query(
+        `
+        UPDATE participants
+        SET pontos = pontos + 3, vitorias = vitorias + 1, saldo = saldo + 3
+        WHERE tournaments_id = $1 AND players_id = $2
+        `,
+        [parsedTournamentId, bye]
+      );
+    }
+
+    await cupSwiss.rebuildSwissStats(client, parsedTournamentId);
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: `Rodada suíça ${roundNumber} gerada com sucesso!`,
+      round: roundNumber,
+      totalRounds,
+      qtdConfrontos: pairings.length,
+      qtdByes: bye ? 1 : 0,
+      matchIds: createdMatches
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Erro ao gerar rodada suíça.' });
+  } finally {
+    client.release();
+  }
+});
+
 app.get('/getCupStatus', auth, async (req, res) => {
   const id = parsePositiveInt(req.query.tournamentId);
   if (!id) return res.status(400).json({ error: 'tournamentId inválido.' });
 
   try {
     const tournamentRes = await pool.query(
-      'SELECT id, name, qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa, dateend FROM tournaments WHERE id = $1',
+      'SELECT id, name, qtdGrupos, qtdClassificados, formatoMataMata, formatoCopa, qtdRodadasSuico, dateend FROM tournaments WHERE id = $1',
       [id]
     );
     if (tournamentRes.rows.length === 0) {
@@ -943,6 +1117,9 @@ app.get('/getCupStatus', auth, async (req, res) => {
     const tournament = tournamentRes.rows[0];
     const formatoCopa = readFormatoCopa(tournament);
     const knockoutOnly = formatoCopa === 'knockout';
+    const swissMode = formatoCopa === 'swiss';
+    const qtdRodadasSuico =
+      tournament.qtdrodadassuico ?? tournament.qtdRodadasSuico ?? null;
 
     const participantsCountRes = await pool.query(
       'SELECT COUNT(*)::int AS n FROM participants WHERE tournaments_id = $1',
@@ -975,6 +1152,7 @@ app.get('/getCupStatus', auth, async (req, res) => {
     );
 
     const knockoutRounds = knockoutRes.rows
+      .filter((r) => cupKnockout.isKnockoutPhase(r.phase))
       .map((r) => ({
         phase: r.phase,
         total: r.total,
@@ -983,6 +1161,15 @@ app.get('/getCupStatus', auth, async (req, res) => {
         sortKey: cupKnockout.phaseSortKey(r.phase)
       }))
       .sort((a, b) => a.sortKey - b.sortKey);
+
+    const swissState = swissMode ? await cupSwiss.getSwissState(pool, id) : null;
+    const swissRoundsTotal = swissMode
+      ? cupSwiss.resolveSwissRounds(qtdParticipantes, qtdRodadasSuico)
+      : 0;
+    const swissComplete = swissMode
+      && swissState.hasSwiss
+      && swissState.currentRound >= swissRoundsTotal
+      && swissState.latestComplete;
 
     const hasKnockout = knockoutRounds.length > 0;
     const groupsComplete = groupStats.total > 0 && groupStats.completed === groupStats.total;
@@ -1038,6 +1225,7 @@ app.get('/getCupStatus', auth, async (req, res) => {
       qtdGrupos: tournament.qtdgrupos ?? tournament.qtdGrupos,
       qtdClassificados: tournament.qtdclassificados ?? tournament.qtdClassificados,
       formatoMataMata: tournament.formatomatamata ?? tournament.formatoMataMata,
+      qtdRodadasSuico,
       dateEnd: tournament.dateend ?? tournament.dateEnd,
       groups: {
         total: groupStats.total,
@@ -1045,6 +1233,15 @@ app.get('/getCupStatus', auth, async (req, res) => {
         pending: groupStats.total - groupStats.completed,
         complete: groupsComplete
       },
+      swiss: swissMode ? {
+        rounds: swissState.rounds,
+        totalRounds: swissRoundsTotal,
+        currentRound: swissState.currentRound,
+        complete: swissComplete,
+        canGenerateNextRound:
+          !hasKnockout
+          && (!swissState.hasSwiss || (swissState.latestComplete && swissState.currentRound < swissRoundsTotal))
+      } : null,
       knockout: {
         hasKnockout,
         rounds: knockoutRounds,
@@ -1054,7 +1251,9 @@ app.get('/getCupStatus', auth, async (req, res) => {
       },
       canGenerateKnockout: knockoutOnly
         ? !hasKnockout && qtdParticipantes >= 2
-        : groupsComplete && !hasKnockout,
+        : swissMode
+          ? swissComplete && !hasKnockout
+          : groupsComplete && !hasKnockout,
       canAdvanceKnockout:
         hasKnockout &&
         latestKnockoutComplete &&
@@ -1075,7 +1274,7 @@ app.get('/getGroupStandings', auth, async (req, res) => {
   const client = await pool.connect();
   try {
     const tournamentRes = await client.query(
-      'SELECT qtdClassificados FROM tournaments WHERE id = $1',
+      'SELECT qtdClassificados, formatoCopa FROM tournaments WHERE id = $1',
       [id]
     );
     if (tournamentRes.rows.length === 0) {
@@ -1084,6 +1283,12 @@ app.get('/getGroupStandings', auth, async (req, res) => {
 
     const qtdClassificados =
       tournamentRes.rows[0].qtdclassificados ?? tournamentRes.rows[0].qtdClassificados ?? 2;
+    const formatoCopa = readFormatoCopa(tournamentRes.rows[0]);
+
+    if (formatoCopa === 'swiss') {
+      const { standings } = await cupSwiss.fetchSwissStandings(client, id, qtdClassificados);
+      return res.status(200).json(standings);
+    }
 
     const { standings } = await cupKnockout.fetchGroupStandings(client, id, qtdClassificados);
     return res.status(200).json(standings);
@@ -1208,7 +1413,7 @@ app.post('/generateKnockout', auth, async (req, res) => {
     await client.query('BEGIN');
 
     const tournamentRes = await client.query(
-      'SELECT qtdClassificados, formatoMataMata, formatoCopa FROM tournaments WHERE id = $1 FOR UPDATE',
+      'SELECT qtdClassificados, formatoMataMata, formatoCopa, qtdRodadasSuico FROM tournaments WHERE id = $1 FOR UPDATE',
       [tournamentId]
     );
     if (tournamentRes.rows.length === 0) {
@@ -1232,6 +1437,104 @@ app.post('/generateKnockout', auth, async (req, res) => {
       });
     }
 
+    if (formatoCopa === 'swiss') {
+      const qtdRodadasSuico =
+        tournamentRes.rows[0].qtdrodadassuico ?? tournamentRes.rows[0].qtdRodadasSuico;
+      const participantsCountRes = await client.query(
+        'SELECT COUNT(*)::int AS n FROM participants WHERE tournaments_id = $1',
+        [tournamentId]
+      );
+      const qtdParticipantes = participantsCountRes.rows[0].n;
+      const totalRounds = cupSwiss.resolveSwissRounds(qtdParticipantes, qtdRodadasSuico);
+      const swissState = await cupSwiss.getSwissState(client, tournamentId);
+
+      if (!swissState.hasSwiss) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Gere pelo menos uma rodada suíça antes do mata-mata.' });
+      }
+      if (swissState.currentRound < totalRounds || !swissState.latestComplete) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'A fase suíça ainda não foi concluída.' });
+      }
+
+      const pendingSwiss = await client.query(
+        `
+        SELECT COUNT(*)::int AS n
+        FROM tournament_matches
+        WHERE tournament_id = $1 AND phase LIKE 'swiss_%' AND winner_id IS NULL
+        `,
+        [tournamentId]
+      );
+      if (pendingSwiss.rows[0].n > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Ainda há confrontos pendentes na fase suíça.' });
+      }
+
+      const existingKo = await client.query(
+        `
+        SELECT COUNT(*)::int AS n
+        FROM tournament_matches
+        WHERE tournament_id = $1
+          AND phase NOT LIKE 'swiss_%'
+          AND phase <> 'groups'
+        `,
+        [tournamentId]
+      );
+      if (existingKo.rows[0].n > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'O mata-mata já foi gerado para este torneio.' });
+      }
+
+      await cupSwiss.rebuildSwissStats(client, tournamentId);
+      const { qualified } = await cupSwiss.fetchSwissStandings(client, tournamentId, qtdClassificados);
+      const rankedIds = qualified.map((row) => row.players_id);
+
+      if (rankedIds.length < 2) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'São necessários pelo menos 2 classificados para o mata-mata.' });
+      }
+
+      const bracketRound = cupKnockout.buildSeededKnockoutRound(rankedIds);
+      const { pairings, byes, totalSlots, playerCount } = bracketRound;
+
+      if (pairings.length === 0 && byes.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Não foi possível montar confrontos do mata-mata.' });
+      }
+
+      const phase = cupKnockout.knockoutPhaseForBracketSize(totalSlots);
+      if (!phase) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Quantidade de classificados não suportada para chave.' });
+      }
+
+      const created = await cupKnockout.insertKnockoutRound(
+        client,
+        tournamentId,
+        pairings,
+        formatoMataMata,
+        phase
+      );
+      const byeMatchIds = await cupKnockout.insertKnockoutByes(
+        client,
+        tournamentId,
+        byes,
+        phase
+      );
+
+      await client.query('COMMIT');
+
+      return res.status(200).json({
+        message: 'Mata-mata gerado com sucesso!',
+        formatoCopa: 'swiss',
+        phase,
+        qtdClassificados: playerCount,
+        qtdConfrontos: created.length,
+        qtdByes: byeMatchIds.length,
+        matchIds: [...created, ...byeMatchIds]
+      });
+    }
+
     const pendingGroups = await client.query(
       `
       SELECT COUNT(*)::int AS n
@@ -1249,7 +1552,9 @@ app.post('/generateKnockout', auth, async (req, res) => {
       `
       SELECT COUNT(*)::int AS n
       FROM tournament_matches
-      WHERE tournament_id = $1 AND phase <> 'groups'
+      WHERE tournament_id = $1
+        AND phase NOT LIKE 'swiss_%'
+        AND phase <> 'groups'
       `,
       [tournamentId]
     );
@@ -1354,7 +1659,9 @@ app.post('/advanceKnockout', auth, async (req, res) => {
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE winner_id IS NOT NULL)::int AS completed
       FROM tournament_matches
-      WHERE tournament_id = $1 AND phase <> 'groups'
+      WHERE tournament_id = $1
+        AND phase NOT LIKE 'swiss_%'
+        AND phase <> 'groups'
       GROUP BY phase
       `,
       [tournamentId]
@@ -1366,6 +1673,7 @@ app.post('/advanceKnockout', auth, async (req, res) => {
     }
 
     const rounds = roundsRes.rows
+      .filter((r) => cupKnockout.isKnockoutPhase(r.phase))
       .map((r) => ({ ...r, sortKey: cupKnockout.phaseSortKey(r.phase) }))
       .sort((a, b) => a.sortKey - b.sortKey);
 

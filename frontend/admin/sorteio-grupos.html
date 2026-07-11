@@ -44,6 +44,7 @@
               <label class="form-label" for="formatoCopa">Formato da copa</label>
               <select class="form-select" id="formatoCopa">
                 <option value="groups">Grupos + mata-mata</option>
+                <option value="swiss">Suíço + mata-mata</option>
                 <option value="knockout">Só mata-mata (eliminatória)</option>
               </select>
             </div>
@@ -61,6 +62,20 @@
               </div>
             </div>
 
+            <div id="swissSetup" class="d-none">
+              <div class="mb-3">
+                <label class="form-label" for="qtdClassificadosSwiss">Classificados para o mata-mata</label>
+                <input type="number" class="form-control" id="qtdClassificadosSwiss" min="2" max="128" value="8">
+                <div class="form-text">Top N da classificação suíça avançam (oitavas, quartas, etc.).</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="qtdRodadasSuico">Rodadas suíças</label>
+                <input type="number" class="form-control" id="qtdRodadasSuico" min="1" max="12" placeholder="Automático">
+                <div class="form-text">Deixe vazio para calcular automaticamente (mín. 3).</div>
+              </div>
+            </div>
+
             <div class="mb-3">
               <label class="form-label" for="formatoMataMata">Formato do Mata-Mata</label>
               <select class="form-select" id="formatoMataMata">
@@ -73,6 +88,9 @@
               <button class="btn btn-success" id="saveCupSetup" type="button">Salvar Configuração</button>
               <button class="btn btn-warning" id="generateCupGroups" type="button">
                 Sortear Grupos e Gerar Fase de Grupos
+              </button>
+              <button class="btn btn-warning d-none" id="generateSwissRound" type="button">
+                Gerar Rodada Suíça
               </button>
               <button class="btn btn-warning d-none" id="generateDirectKnockout" type="button">
                 Sortear Chave e Gerar Mata-Mata

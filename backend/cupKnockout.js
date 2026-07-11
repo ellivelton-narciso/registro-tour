@@ -70,7 +70,49 @@ function buildThirdPlacePairing(semifinalMatches) {
 
 function phaseSortKey(phase) {
   if (phase === 'groups') return 0;
+  if (typeof phase === 'string' && phase.startsWith('swiss_')) {
+    const round = parseInt(phase.replace('swiss_', ''), 10);
+    return Number.isFinite(round) ? round * 0.01 : 0.5;
+  }
   return KNOCKOUT_PHASE_ORDER[phase] ?? 99;
+}
+
+function isKnockoutPhase(phase) {
+  return phase !== 'groups' && !(typeof phase === 'string' && phase.startsWith('swiss_'));
+}
+
+function generateSeedOrder(totalSlots) {
+  if (totalSlots <= 1) return [1];
+  if (totalSlots === 2) return [1, 2];
+  const half = generateSeedOrder(totalSlots / 2);
+  const result = [];
+  for (const seed of half) {
+    result.push(seed);
+    result.push(totalSlots + 1 - seed);
+  }
+  return result;
+}
+
+function buildSeededKnockoutRound(rankedPlayerIds) {
+  const playerCount = rankedPlayerIds.length;
+  if (playerCount < 2) {
+    return { pairings: [], byes: [], totalSlots: 0, playerCount };
+  }
+
+  const totalSlots = nextPowerOfTwo(playerCount);
+  const seedOrder = generateSeedOrder(totalSlots);
+  const bracket = seedOrder.map((seed) => rankedPlayerIds[seed - 1] ?? null);
+
+  const pairings = [];
+  const byes = [];
+  for (let i = 0; i < bracket.length; i += 2) {
+    const a = bracket[i];
+    const b = bracket[i + 1];
+    if (a && b) pairings.push([a, b]);
+    else if (a || b) byes.push(a || b);
+  }
+
+  return { pairings, byes, totalSlots, playerCount };
 }
 
 function shuffle(list) {
@@ -340,5 +382,7 @@ module.exports = {
   rebuildParticipantStats,
   insertKnockoutRound,
   insertKnockoutByes,
-  buildThirdPlacePairing
+  buildThirdPlacePairing,
+  isKnockoutPhase,
+  buildSeededKnockoutRound
 };

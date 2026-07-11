@@ -14,18 +14,38 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (el) el.textContent = text || '';
   }
 
+  function getFormatoCopa() {
+    return document.getElementById('formatoCopa').value;
+  }
+
   function isKnockoutOnly() {
-    return document.getElementById('formatoCopa').value === 'knockout';
+    return getFormatoCopa() === 'knockout';
+  }
+
+  function isSwissMode() {
+    return getFormatoCopa() === 'swiss';
   }
 
   function syncFormatoCopaUi() {
     const knockout = isKnockoutOnly();
-    document.getElementById('groupsSetup').classList.toggle('d-none', knockout);
-    document.getElementById('generateCupGroups').classList.toggle('d-none', knockout);
+    const swiss = isSwissMode();
+
+    document.getElementById('groupsSetup').classList.toggle('d-none', knockout || swiss);
+    document.getElementById('swissSetup').classList.toggle('d-none', !swiss);
+    document.getElementById('generateCupGroups').classList.toggle('d-none', knockout || swiss);
+    document.getElementById('generateSwissRound').classList.toggle('d-none', !swiss);
     document.getElementById('generateDirectKnockout').classList.toggle('d-none', !knockout);
-    document.getElementById('setupHint').textContent = knockout
-      ? 'Copa eliminatória: todos os inscritos entram na chave (com byes até potência de 2). Mínimo 2 inscritos. Ao sortear novamente, a chave inteira é recriada.'
-      : 'Fase de grupos: round-robin ida e volta (1 jogo por confronto). O formato MD1/MD3 acima vale para o mata-mata. Ao sortear novamente, o backend recria a fase de grupos.';
+
+    if (knockout) {
+      document.getElementById('setupHint').textContent =
+        'Copa eliminatória: todos os inscritos entram na chave (com byes até potência de 2). Mínimo 2 inscritos. Ao sortear novamente, a chave inteira é recriada.';
+    } else if (swiss) {
+      document.getElementById('setupHint').textContent =
+        'Fase suíça: gere uma rodada por vez após concluir os confrontos. O top N classifica para o mata-mata (oitavas, quartas, etc.). MD1/MD3 vale só no mata-mata.';
+    } else {
+      document.getElementById('setupHint').textContent =
+        'Fase de grupos: round-robin ida e volta (1 jogo por confronto). O formato MD1/MD3 acima vale para o mata-mata. Ao sortear novamente, o backend recria a fase de grupos.';
+    }
   }
 
   let currentTournamentId = null;
@@ -49,6 +69,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('qtdParticipantes').value = data.qtdParticipantes ?? 0;
     document.getElementById('qtdGrupos').value = data.qtdGrupos ?? 2;
     document.getElementById('qtdClassificados').value = data.qtdClassificados ?? 2;
+    document.getElementById('qtdClassificadosSwiss').value = data.qtdClassificados ?? 8;
+    document.getElementById('qtdRodadasSuico').value = data.qtdRodadasSuico ?? data.qtdrodadassuico ?? '';
 
     const formatoCopa = data.formatoCopa ?? data.formatocopa ?? 'groups';
     document.getElementById('formatoCopa').value = formatoCopa;
@@ -138,9 +160,13 @@ document.addEventListener('DOMContentLoaded', async function () {
       return;
     }
 
-    if (isKnockoutOnly()) {
+    if (isKnockoutOnly() || isSwissMode()) {
       renderParticipantsFlat(data);
-      setHint(`Total: ${data.length} inscrito(s) · chave eliminatória`);
+      setHint(
+        isSwissMode()
+          ? `Total: ${data.length} inscrito(s) · fase suíça`
+          : `Total: ${data.length} inscrito(s) · chave eliminatória`
+      );
       return;
     }
 
@@ -156,11 +182,15 @@ document.addEventListener('DOMContentLoaded', async function () {
   async function saveCupSetup() {
     const payload = {
       tournamentId: currentTournamentId,
-      formatoCopa: document.getElementById('formatoCopa').value,
+      formatoCopa: getFormatoCopa(),
       formatoMataMata: document.getElementById('formatoMataMata').value
     };
 
-    if (!isKnockoutOnly()) {
+    if (isSwissMode()) {
+      payload.qtdClassificados = document.getElementById('qtdClassificadosSwiss').value;
+      const rodadas = document.getElementById('qtdRodadasSuico').value.trim();
+      if (rodadas) payload.qtdRodadasSuico = rodadas;
+    } else if (!isKnockoutOnly()) {
       payload.qtdGrupos = document.getElementById('qtdGrupos').value;
       payload.qtdClassificados = document.getElementById('qtdClassificados').value;
     }
@@ -214,6 +244,47 @@ document.addEventListener('DOMContentLoaded', async function () {
       icon: 'success',
       title: 'Sorteio concluído',
       text: data.message || 'Grupos gerados com sucesso!'
+    });
+
+    await loadCupSetup();
+    await loadParticipants();
+  }
+
+  async function generateSwissRound(reset = false) {
+    const qtd = parseInt(document.getElementById('qtdParticipantes').value, 10) || 0;
+    if (qtd < 2) {
+      Swal.fire({ icon: 'warning', title: 'Inscritos insuficientes', text: 'São necessários pelo menos 2 inscritos.' });
+      return;
+    }
+
+    const confirmRes = await Swal.fire({
+      icon: 'warning',
+      title: reset ? 'Reiniciar fase suíça?' : 'Gerar próxima rodada suíça?',
+      text: reset
+        ? 'Todos os confrontos suíços serão apagados e a rodada 1 será recriada.'
+        : 'Novos emparelhamentos serão criados para a próxima rodada.',
+      showCancelButton: true,
+      confirmButtonText: reset ? 'Sim, reiniciar' : 'Sim, gerar',
+      cancelButtonText: 'Cancelar'
+    });
+    if (!confirmRes.isConfirmed) return;
+
+    const res = await fetch(`${urlBE}/generateSwissRound`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        tournamentId: currentTournamentId,
+        reset
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao gerar rodada suíça.');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Rodada suíça gerada',
+      text: data.message || `Rodada ${data.round}/${data.totalRounds} criada.`
     });
 
     await loadCupSetup();
@@ -280,6 +351,23 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('generateCupGroups').addEventListener('click', async () => {
       try {
         await generateCupGroups();
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
+      }
+    });
+
+    document.getElementById('generateSwissRound').addEventListener('click', async () => {
+      try {
+        await generateSwissRound(false);
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
+      }
+    });
+
+    document.getElementById('generateSwissRound').addEventListener('contextmenu', async (event) => {
+      event.preventDefault();
+      try {
+        await generateSwissRound(true);
       } catch (e) {
         Swal.fire({ icon: 'error', title: 'Erro', text: e.message || String(e) });
       }
