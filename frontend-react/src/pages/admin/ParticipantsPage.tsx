@@ -29,8 +29,17 @@ export function ParticipantsPage() {
 
   useEffect(() => {
     document.title = 'Participantes';
-    load().catch(console.error);
-  }, [load]);
+    let cancelled = false;
+
+    load().catch((err) => {
+      if (!cancelled) console.error(err);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const uniquePokemon = useMemo(() => {
     const all = trainers.flatMap((t) => t.pokemonList || []);

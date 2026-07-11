@@ -36,14 +36,24 @@ export function ConfrontosCopaPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     document.title = 'Confrontos da Copa';
     apiFetch<TournamentConfig>('/getConfig', { auth: true })
       .then((cfg) => {
+        if (cancelled) return;
         setTournamentId(cfg.id);
         return refreshAll(cfg.id);
       })
-      .catch((err) => Swal.fire({ icon: 'error', title: 'Erro', text: err.message }));
-  }, [refreshAll]);
+      .catch((err) => {
+        if (!cancelled) Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredMatches = useMemo(() => {
     const player = filters.player.trim().toLowerCase();

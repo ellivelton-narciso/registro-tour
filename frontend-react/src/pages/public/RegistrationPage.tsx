@@ -80,25 +80,37 @@ export function RegistrationPage() {
   );
 
   useEffect(() => {
+    let cancelled = false;
+
     apiFetch<TournamentConfig>('/getConfig')
-      .then(async (cfg) => {
+      .then((cfg) => {
+        if (cancelled) return;
         if (cfg.error) throw new Error(cfg.error);
         setConfig(cfg);
         document.title = cfg.titulo || 'Inscrição';
-        if (!championsMode && cfg.gen) {
-          const data = await loadPokemon(cfg.gen);
-          buildOptions(data, new Set());
-        }
       })
       .catch((err) => {
+        if (cancelled) return;
         Swal.fire({
           icon: 'error',
           title: 'Erro de Conexão',
           text: err instanceof Error ? err.message : 'Não foi possível carregar as configurações.',
         });
       })
-      .finally(() => setLoading(false));
-  }, [buildOptions, championsMode, loadPokemon]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!config?.gen || isChampionsGen(config.gen)) return;
+
+    loadPokemon(config.gen).catch(console.error);
+  }, [config?.id, config?.gen, loadPokemon]);
 
   const prizeSet = useMemo(() => new Set(playerPrizeNames.map(normalizePokemonName)), [playerPrizeNames]);
 
@@ -309,7 +321,7 @@ export function RegistrationPage() {
   }
 
   if (loading) return <div className="container mt-5 text-center">Carregando...</div>;
-  if (config?.encerrado) return <Navigate to="/encerradas" replace />;
+  if (config?.encerrado && config.encerrado !== 0) return <Navigate to="/encerradas" replace />;
 
   return (
     <div className="page-shell">

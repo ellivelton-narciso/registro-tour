@@ -34,11 +34,12 @@ export function SorteioGruposPage() {
           : 'Informe classificados e aguarde inscritos para calcular o mínimo.'
       );
     },
-    [form]
+    [form.formatoCopa, form.qtdParticipantes, form.qtdClassificadosSwiss]
   );
 
-  const loadSetup = useCallback(async (tid: number) => {
+  const loadSetup = useCallback(async (tid: number): Promise<FormatoCopa> => {
     const data = await apiFetch<CupSetup>(`/getCupSetup?tournamentId=${tid}`, { auth: true });
+    const formato = (data.formatoCopa ?? 'groups') as FormatoCopa;
     setForm((f) => ({
       ...f,
       qtdParticipantes: data.qtdParticipantes ?? 0,
@@ -46,10 +47,11 @@ export function SorteioGruposPage() {
       qtdClassificados: data.qtdClassificados ?? 2,
       qtdClassificadosSwiss: data.qtdClassificados ?? 8,
       qtdRodadasSuico: data.qtdRodadasSuico ? String(data.qtdRodadasSuico) : '',
-      formatoCopa: (data.formatoCopa ?? 'groups') as FormatoCopa,
+      formatoCopa: formato,
       formatoMataMata: String(data.formatoMataMata ?? 1),
     }));
     syncSwissHint(data.minRodadasSuico, data.rodadasSuicoAutomaticas);
+    return formato;
   }, [syncSwissHint]);
 
   const loadParticipants = useCallback(async (tid: number, formato: FormatoCopa) => {
@@ -71,14 +73,25 @@ export function SorteioGruposPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     document.title = 'Sorteio da Copa';
     apiFetch<TournamentConfig>('/getConfig', { auth: true })
       .then(async (cfg) => {
+        if (cancelled) return;
         setTournamentId(cfg.id);
-        await loadSetup(cfg.id);
-        await loadParticipants(cfg.id, form.formatoCopa);
+        const formato = await loadSetup(cfg.id);
+        if (!cancelled) await loadParticipants(cfg.id, formato);
       })
-      .catch((err) => Swal.fire({ icon: 'error', title: 'Erro', text: err.message }));
+      .catch((err) => {
+        if (!cancelled) Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // Montagem única — loadSetup/loadParticipants estáveis o suficiente no 1º render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

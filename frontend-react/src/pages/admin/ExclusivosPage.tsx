@@ -26,11 +26,20 @@ export function ExclusivosPage() {
 
   useEffect(() => {
     document.title = 'Premiação';
+    let cancelled = false;
+
     loadAllGenPokemonNames()
-      .then((names) => setPokemonOptions(names.map((n) => ({ value: n, label: n }))))
+      .then((names) => {
+        if (!cancelled) setPokemonOptions(names.map((n) => ({ value: n, label: n })));
+      })
       .catch(console.error);
     loadPrizes().catch(console.error);
-  }, [loadPrizes]);
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function openModal(isEdit: boolean, prize?: Prize) {
     const initial = prize ?? { id: 0, nome: '', codigo: '', pokemonList: [] };
