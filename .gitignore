@@ -6,4 +6,4 @@ dist/
 uploads/team-images/*
 !uploads/team-images/.gitkeep
 frontend/.env
-frontend/assets/js/.env
+.env
