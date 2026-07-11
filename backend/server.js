@@ -601,10 +601,20 @@ app.get('/getCupSetup', auth, async (req, res) => {
       [id]
     );
 
+    const row = tournamentResult.rows[0];
+    const qtdParticipantes = participantsResult.rows[0].qtdparticipantes
+      ?? participantsResult.rows[0].qtdParticipantes
+      ?? 0;
+    const qtdClassificados = row.qtdclassificados ?? row.qtdClassificados ?? null;
+    const minRodadasSuico = cupSwiss.minimumSwissRounds(qtdParticipantes, qtdClassificados);
+    const rodadasSuicoAutomaticas = cupSwiss.recommendedSwissRounds(qtdParticipantes, qtdClassificados);
+
     return res.status(200).json({
-      ...tournamentResult.rows[0],
-      formatoCopa: readFormatoCopa(tournamentResult.rows[0]),
-      ...participantsResult.rows[0]
+      ...row,
+      formatoCopa: readFormatoCopa(row),
+      ...participantsResult.rows[0],
+      minRodadasSuico,
+      rodadasSuicoAutomaticas
     });
   } catch (err) {
     console.error(err);
@@ -684,13 +694,34 @@ app.post('/updateCupSetup', auth, async (req, res) => {
     }
     if (qtdRodadasSuico !== undefined && qtdRodadasSuico !== null && qtdRodadasSuico !== '') {
       parsedQtdRodadasSuico = parsePositiveInt(qtdRodadasSuico);
-      if (!parsedQtdRodadasSuico || parsedQtdRodadasSuico > 12) {
-        return res.status(400).json({ error: 'qtdRodadasSuico deve ser entre 1 e 12.' });
+      if (!parsedQtdRodadasSuico || parsedQtdRodadasSuico > cupSwiss.SWISS_MAX_ROUNDS) {
+        return res.status(400).json({
+          error: `qtdRodadasSuico deve ser entre 1 e ${cupSwiss.SWISS_MAX_ROUNDS}.`
+        });
       }
     }
   }
 
   try {
+    if (parsedFormatoCopa === 'swiss') {
+      const participantsCountRes = await pool.query(
+        'SELECT COUNT(*)::int AS n FROM participants WHERE tournaments_id = $1',
+        [tournamentId]
+      );
+      const qtdParticipantes = participantsCountRes.rows[0].n;
+      const minRodadasSuico = cupSwiss.minimumSwissRounds(qtdParticipantes, parsedQtdClassificados);
+
+      if (qtdParticipantes >= 2 && parsedQtdClassificados > qtdParticipantes) {
+        return res.status(400).json({
+          error: 'qtdClassificados não pode exceder o número de inscritos.'
+        });
+      }
+      if (parsedQtdRodadasSuico && parsedQtdRodadasSuico < minRodadasSuico) {
+        return res.status(400).json({
+          error: `qtdRodadasSuico deve ser no mínimo ${minRodadasSuico} para ${qtdParticipantes} inscrito(s) e top ${parsedQtdClassificados} classificados.`
+        });
+      }
+    }
     let result;
     if (parsedFormatoCopa === 'knockout') {
       result = await pool.query(
@@ -1016,7 +1047,7 @@ app.post('/generateSwissRound', auth, async (req, res) => {
       return res.status(400).json({ error: 'qtdClassificados não pode exceder o número de inscritos.' });
     }
 
-    const totalRounds = cupSwiss.resolveSwissRounds(total, qtdRodadasSuicoDb);
+    const totalRounds = cupSwiss.resolveSwissRounds(total, qtdRodadasSuicoDb, qtdClassificados);
     const swissState = await cupSwiss.getSwissState(client, parsedTournamentId);
 
     if (reset || !swissState.hasSwiss) {
@@ -1162,9 +1193,17 @@ app.get('/getCupStatus', auth, async (req, res) => {
       }))
       .sort((a, b) => a.sortKey - b.sortKey);
 
+    const qtdClassificados =
+      tournament.qtdclassificados ?? tournament.qtdClassificados ?? null;
     const swissState = swissMode ? await cupSwiss.getSwissState(pool, id) : null;
+    const minRodadasSuico = swissMode
+      ? cupSwiss.minimumSwissRounds(qtdParticipantes, qtdClassificados)
+      : 0;
+    const rodadasSuicoAutomaticas = swissMode
+      ? cupSwiss.recommendedSwissRounds(qtdParticipantes, qtdClassificados)
+      : 0;
     const swissRoundsTotal = swissMode
-      ? cupSwiss.resolveSwissRounds(qtdParticipantes, qtdRodadasSuico)
+      ? cupSwiss.resolveSwissRounds(qtdParticipantes, qtdRodadasSuico, qtdClassificados)
       : 0;
     const swissComplete = swissMode
       && swissState.hasSwiss
@@ -1223,9 +1262,11 @@ app.get('/getCupStatus', auth, async (req, res) => {
       formatoCopa,
       qtdParticipantes,
       qtdGrupos: tournament.qtdgrupos ?? tournament.qtdGrupos,
-      qtdClassificados: tournament.qtdclassificados ?? tournament.qtdClassificados,
+      qtdClassificados,
       formatoMataMata: tournament.formatomatamata ?? tournament.formatoMataMata,
       qtdRodadasSuico,
+      minRodadasSuico: swissMode ? minRodadasSuico : null,
+      rodadasSuicoAutomaticas: swissMode ? rodadasSuicoAutomaticas : null,
       dateEnd: tournament.dateend ?? tournament.dateEnd,
       groups: {
         total: groupStats.total,
@@ -1236,6 +1277,8 @@ app.get('/getCupStatus', auth, async (req, res) => {
       swiss: swissMode ? {
         rounds: swissState.rounds,
         totalRounds: swissRoundsTotal,
+        minRodadasSuico,
+        rodadasSuicoAutomaticas,
         currentRound: swissState.currentRound,
         complete: swissComplete,
         canGenerateNextRound:
@@ -1445,7 +1488,11 @@ app.post('/generateKnockout', auth, async (req, res) => {
         [tournamentId]
       );
       const qtdParticipantes = participantsCountRes.rows[0].n;
-      const totalRounds = cupSwiss.resolveSwissRounds(qtdParticipantes, qtdRodadasSuico);
+      const totalRounds = cupSwiss.resolveSwissRounds(
+        qtdParticipantes,
+        qtdRodadasSuico,
+        qtdClassificados
+      );
       const swissState = await cupSwiss.getSwissState(client, tournamentId);
 
       if (!swissState.hasSwiss) {

@@ -26,6 +26,81 @@ document.addEventListener('DOMContentLoaded', async function () {
     return getFormatoCopa() === 'swiss';
   }
 
+  const SWISS_MIN_ROUNDS = 3;
+  const SWISS_MAX_ROUNDS = 15;
+
+  function simulateSwissWinTotals(playerCount, rounds) {
+    let buckets = new Map([[0, playerCount]]);
+
+    for (let r = 0; r < rounds; r++) {
+      const next = new Map();
+      for (const [wins, count] of buckets) {
+        if (!count) continue;
+        const bye = count % 2;
+        const playing = count - bye;
+        const half = playing / 2;
+        next.set(wins + 1, (next.get(wins + 1) || 0) + half + bye);
+        next.set(wins, (next.get(wins) || 0) + half);
+      }
+      buckets = next;
+    }
+
+    const sorted = [];
+    for (let wins = rounds; wins >= 0; wins--) {
+      const count = buckets.get(wins) || 0;
+      for (let i = 0; i < count; i++) sorted.push(wins);
+    }
+    return sorted;
+  }
+
+  function hasClearQualifyingCut(playerCount, qtdClassificados, rounds) {
+    if (qtdClassificados >= playerCount) return true;
+    const sorted = simulateSwissWinTotals(playerCount, rounds);
+    if (sorted.length !== playerCount) return false;
+    return sorted[qtdClassificados - 1] > sorted[qtdClassificados];
+  }
+
+  function minimumSwissRounds(playerCount, qtdClassificados) {
+    if (playerCount < 2) return 0;
+    const n = playerCount;
+    const k = Math.max(2, Math.min(Number(qtdClassificados) || n, n));
+    const poolFloor = Math.ceil(Math.log2(n));
+
+    if (k >= n) {
+      return Math.max(SWISS_MIN_ROUNDS, Math.min(poolFloor, SWISS_MAX_ROUNDS));
+    }
+
+    const start = Math.max(SWISS_MIN_ROUNDS, poolFloor);
+    for (let rounds = start; rounds <= SWISS_MAX_ROUNDS; rounds++) {
+      if (hasClearQualifyingCut(n, k, rounds)) return rounds;
+    }
+    return SWISS_MAX_ROUNDS;
+  }
+
+  function syncSwissRoundsUi(minFromServer, autoFromServer) {
+    if (!isSwissMode()) return;
+
+    const participants = Number(document.getElementById('qtdParticipantes').value) || 0;
+    const classificados = Number(document.getElementById('qtdClassificadosSwiss').value) || 0;
+    const minRodadas = minFromServer ?? minimumSwissRounds(participants, classificados);
+    const autoRodadas = autoFromServer ?? minRodadas;
+
+    const input = document.getElementById('qtdRodadasSuico');
+    const hint = document.getElementById('swissRoundsHint');
+    if (!input || !hint) return;
+
+    input.min = String(minRodadas);
+    hint.textContent =
+      participants >= 2 && classificados >= 2
+        ? `Mínimo: ${minRodadas} rodada(s) para ${participants} inscrito(s) e top ${classificados} — último classificado com mais vitórias que o 1º eliminado. Deixe vazio para usar ${autoRodadas}. Empate no mesmo recorde entre classificados: saldo e vitórias.`
+        : 'Informe classificados e aguarde inscritos para calcular o mínimo.';
+
+    const current = input.value.trim();
+    if (current && Number(current) < minRodadas) {
+      input.value = String(minRodadas);
+    }
+  }
+
   function syncFormatoCopaUi() {
     const knockout = isKnockoutOnly();
     const swiss = isSwissMode();
@@ -42,6 +117,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     } else if (swiss) {
       document.getElementById('setupHint').textContent =
         'Fase suíça: gere uma rodada por vez após concluir os confrontos. O top N classifica para o mata-mata (oitavas, quartas, etc.). MD1/MD3 vale só no mata-mata.';
+      syncSwissRoundsUi();
     } else {
       document.getElementById('setupHint').textContent =
         'Fase de grupos: round-robin ida e volta (1 jogo por confronto). O formato MD1/MD3 acima vale para o mata-mata. Ao sortear novamente, o backend recria a fase de grupos.';
@@ -81,6 +157,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     syncFormatoCopaUi();
+    syncSwissRoundsUi(data.minRodadasSuico, data.rodadasSuicoAutomaticas);
   }
 
   function renderParticipantsByGroup(participants) {
@@ -189,7 +266,18 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (isSwissMode()) {
       payload.qtdClassificados = document.getElementById('qtdClassificadosSwiss').value;
       const rodadas = document.getElementById('qtdRodadasSuico').value.trim();
-      if (rodadas) payload.qtdRodadasSuico = rodadas;
+      const participants = Number(document.getElementById('qtdParticipantes').value) || 0;
+      const classificados = Number(payload.qtdClassificados) || 0;
+      const minRodadas = minimumSwissRounds(participants, classificados);
+
+      if (rodadas) {
+        if (Number(rodadas) < minRodadas) {
+          throw new Error(
+            `Rodadas suíças deve ser no mínimo ${minRodadas} para ${participants} inscrito(s) e top ${classificados}.`
+          );
+        }
+        payload.qtdRodadasSuico = rodadas;
+      }
     } else if (!isKnockoutOnly()) {
       payload.qtdGrupos = document.getElementById('qtdGrupos').value;
       payload.qtdClassificados = document.getElementById('qtdClassificados').value;
@@ -338,6 +426,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('formatoCopa').addEventListener('change', async () => {
       syncFormatoCopaUi();
       await loadParticipants();
+    });
+
+    document.getElementById('qtdClassificadosSwiss')?.addEventListener('input', () => {
+      syncSwissRoundsUi();
+    });
+
+    document.getElementById('qtdRodadasSuico')?.addEventListener('input', () => {
+      syncSwissRoundsUi();
     });
 
     document.getElementById('saveCupSetup').addEventListener('click', async () => {

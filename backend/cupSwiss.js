@@ -14,16 +14,68 @@ function swissRoundFromPhase(phase) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function recommendedSwissRounds(playerCount) {
-  if (playerCount < 2) return 0;
-  const calculated = Math.ceil(Math.log2(playerCount));
-  return Math.max(3, Math.min(calculated, 7));
+const SWISS_MIN_ROUNDS = 3;
+const SWISS_MAX_ROUNDS = 15;
+
+function simulateSwissWinTotals(playerCount, rounds) {
+  let buckets = new Map([[0, playerCount]]);
+
+  for (let r = 0; r < rounds; r++) {
+    const next = new Map();
+    for (const [wins, count] of buckets) {
+      if (!count) continue;
+      const bye = count % 2;
+      const playing = count - bye;
+      const half = playing / 2;
+      next.set(wins + 1, (next.get(wins + 1) || 0) + half + bye);
+      next.set(wins, (next.get(wins) || 0) + half);
+    }
+    buckets = next;
+  }
+
+  const sorted = [];
+  for (let wins = rounds; wins >= 0; wins--) {
+    const count = buckets.get(wins) || 0;
+    for (let i = 0; i < count; i++) sorted.push(wins);
+  }
+  return sorted;
 }
 
-function resolveSwissRounds(playerCount, configured) {
+function hasClearQualifyingCut(playerCount, qtdClassificados, rounds) {
+  if (qtdClassificados >= playerCount) return true;
+  const sorted = simulateSwissWinTotals(playerCount, rounds);
+  if (sorted.length !== playerCount) return false;
+  return sorted[qtdClassificados - 1] > sorted[qtdClassificados];
+}
+
+function minimumSwissRounds(playerCount, qtdClassificados) {
+  if (playerCount < 2) return 0;
+  const n = playerCount;
+  const k = Math.max(2, Math.min(Number(qtdClassificados) || n, n));
+  const poolFloor = Math.ceil(Math.log2(n));
+
+  if (k >= n) {
+    return Math.max(SWISS_MIN_ROUNDS, Math.min(poolFloor, SWISS_MAX_ROUNDS));
+  }
+
+  const start = Math.max(SWISS_MIN_ROUNDS, poolFloor);
+  for (let rounds = start; rounds <= SWISS_MAX_ROUNDS; rounds++) {
+    if (hasClearQualifyingCut(n, k, rounds)) return rounds;
+  }
+  return SWISS_MAX_ROUNDS;
+}
+
+function recommendedSwissRounds(playerCount, qtdClassificados) {
+  return minimumSwissRounds(playerCount, qtdClassificados);
+}
+
+function resolveSwissRounds(playerCount, configured, qtdClassificados) {
+  const min = minimumSwissRounds(playerCount, qtdClassificados);
   const parsed = Number(configured);
-  if (Number.isFinite(parsed) && parsed > 0) return Math.min(parsed, 12);
-  return recommendedSwissRounds(playerCount);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.max(min, Math.min(parsed, SWISS_MAX_ROUNDS));
+  }
+  return min;
 }
 
 function compareStandings(a, b) {
@@ -301,9 +353,14 @@ async function insertSwissBye(client, tournamentId, playerId, phase) {
 }
 
 module.exports = {
+  SWISS_MIN_ROUNDS,
+  SWISS_MAX_ROUNDS,
   swissPhaseName,
   isSwissPhase,
   swissRoundFromPhase,
+  simulateSwissWinTotals,
+  hasClearQualifyingCut,
+  minimumSwissRounds,
   recommendedSwissRounds,
   resolveSwissRounds,
   pairSwissRound1,
