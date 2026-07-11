@@ -16,11 +16,8 @@ export function ClosedPage() {
   }, []);
 
   return (
-    <div
-      className="d-flex justify-content-center align-items-center"
-      style={{ minHeight: '100vh', textAlign: 'center', backgroundColor: '#f8f9fa' }}
-    >
-      <div className="bg-white p-4 rounded shadow-sm" style={{ maxWidth: 480 }}>
+    <div className="page-shell d-flex justify-content-center align-items-center">
+      <div className="surface-card text-center" style={{ maxWidth: 480 }}>
         <h1 className="text-danger fs-2">Inscrições Encerradas</h1>
         <p className="mt-2">As inscrições para o torneio foram encerradas. Obrigado pelo seu interesse!</p>
         <p className="mt-3">

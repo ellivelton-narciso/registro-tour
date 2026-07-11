@@ -1,14 +1,146 @@
+:root {
+  --page-bg: #e4e9ef;
+  --surface-bg: #ffffff;
+  --surface-muted: #f1f4f8;
+  --input-bg: #f7f9fc;
+  --input-border: #b7c3d0;
+  --input-border-focus: #2563eb;
+  --text-primary: #2c3e50;
+  --text-muted: #5c6b7a;
+  --shadow-surface: 0 4px 18px rgba(30, 45, 62, 0.08);
+}
+
 body {
-    background-color: #f8f9fa;
-  }
-  
-  h1 {
-    color: #343a40;
-  }
-  
-  #formMessage {
-    font-weight: bold;
-  }
+  background-color: var(--page-bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  color: var(--text-primary);
+}
+
+.page-shell {
+  min-height: 100vh;
+  background-color: var(--page-bg);
+}
+
+.surface-card {
+  background: var(--surface-bg);
+  border: 1px solid #cfd8e3;
+  border-radius: 0.75rem;
+  padding: 1.5rem 1.75rem;
+  box-shadow: var(--shadow-surface);
+}
+
+.surface-card--narrow {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.form-label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.form-control,
+.form-select {
+  background-color: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  color: var(--text-primary);
+}
+
+.form-control::placeholder {
+  color: #8a97a8;
+}
+
+.form-control:hover,
+.form-select:hover {
+  border-color: #95a3b3;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: #ffffff;
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+  color: var(--text-primary);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  background-color: var(--surface-muted);
+  border-color: #d5dde6;
+  color: #6c7a89;
+}
+
+.card {
+  background-color: var(--surface-bg);
+  border-color: #cfd8e3;
+  box-shadow: var(--shadow-surface);
+}
+
+.card-header {
+  border-bottom-color: #dde4ec;
+}
+
+.navbar-surface {
+  background-color: var(--surface-bg) !important;
+  border-bottom: 1px solid #cfd8e3 !important;
+}
+
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* react-select (classNamePrefix="rs") */
+.rs__control {
+  background-color: var(--input-bg) !important;
+  border: 1.5px solid var(--input-border) !important;
+  min-height: 38px;
+  box-shadow: none !important;
+}
+
+.rs__control:hover {
+  border-color: #95a3b3 !important;
+}
+
+.rs__control--is-focused {
+  background-color: #ffffff !important;
+  border-color: var(--input-border-focus) !important;
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15) !important;
+}
+
+.rs__menu {
+  background-color: #ffffff !important;
+  border: 1px solid #cfd8e3;
+  box-shadow: var(--shadow-surface);
+}
+
+.rs__option--is-focused {
+  background-color: #eef4ff !important;
+}
+
+.rs__option--is-selected {
+  background-color: #2563eb !important;
+}
+
+.rs__multi-value {
+  background-color: #e8eef6 !important;
+}
+
+.rs__multi-value__label {
+  color: var(--text-primary) !important;
+}
+
+#formMessage {
+  font-weight: bold;
+}
 
 .cup-bracket-wrap {
   overflow-x: auto;

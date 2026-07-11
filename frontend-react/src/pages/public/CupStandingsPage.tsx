@@ -54,8 +54,8 @@ export function CupStandingsPage() {
   }, [loadStandings]);
 
   return (
-    <>
-      <nav className="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
+    <div className="page-shell">
+      <nav className="navbar navbar-expand-lg navbar-light navbar-surface shadow-sm">
         <div className="container">
           <Link className="navbar-brand fw-semibold" to="/">{navTitle}</Link>
           <div className="navbar-nav ms-auto">
@@ -116,6 +116,6 @@ export function CupStandingsPage() {
           </>
         )}
       </div>
-    </>
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import { apiFetch } from '../../api/client';
 import type { TournamentConfig } from '../../api/types';
 import { AdminNav } from '../../components/AdminNav';
+import { subwaySelectProps } from '../../utils/selectProps';
 import { loadPokemonNamesUpToGen } from '../../utils/pokemonGens';
 
 function isChampionsGen(gen: number) {
@@ -152,9 +153,9 @@ export function ConfigPage() {
   }
 
   const multiProps = {
+    ...subwaySelectProps,
     isMulti: true as const,
     options: pokemonOptions,
-    classNamePrefix: 'select',
   };
 
   return (

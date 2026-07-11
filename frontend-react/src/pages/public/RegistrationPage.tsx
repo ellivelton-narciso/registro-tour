@@ -2,6 +2,7 @@ import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import Select from 'react-select';
+import { subwaySelectProps } from '../../utils/selectProps';
 import Swal from 'sweetalert2';
 import { API_URL, apiFetch } from '../../api/client';
 import type { PokemonEntry, TournamentConfig } from '../../api/types';
@@ -311,9 +312,11 @@ export function RegistrationPage() {
   if (config?.encerrado) return <Navigate to="/encerradas" replace />;
 
   return (
-    <div className="container mt-5">
-      <h1 className="text-center mb-4">{config?.titulo2}</h1>
-      <form onSubmit={handleSubmit}>
+    <div className="page-shell">
+      <div className="container py-5">
+        <h1 className="text-center mb-4">{config?.titulo2}</h1>
+        <div className="surface-card surface-card--narrow">
+          <form onSubmit={handleSubmit}>
         <div className="mb-3">
           <label htmlFor="name" className="form-label">Nick/Nome</label>
           <input
@@ -346,6 +349,7 @@ export function RegistrationPage() {
           <div className="mb-3">
             <label className="form-label">Selecione seu tipo</label>
             <Select
+              {...subwaySelectProps}
               options={MONOTYPE_OPTIONS}
               value={MONOTYPE_OPTIONS.find((o) => o.value === monotype) ?? null}
               onChange={(opt) => setMonotype(opt?.value ?? null)}
@@ -391,6 +395,7 @@ export function RegistrationPage() {
           <div className="mb-3">
             <label className="form-label">Selecione até {config?.qtdescolha ?? 10} Pokémon</label>
             <Select
+              {...subwaySelectProps}
               isMulti
               options={pokemonOptions}
               value={selectedPokemon}
@@ -419,7 +424,9 @@ export function RegistrationPage() {
         )}
 
         <button type="submit" className="btn btn-primary w-100">Enviar</button>
-      </form>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

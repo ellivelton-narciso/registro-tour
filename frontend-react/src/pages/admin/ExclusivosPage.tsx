@@ -11,6 +11,7 @@ import { apiFetch } from '../../api/client';
 import type { Prize } from '../../api/types';
 import { AdminNav } from '../../components/AdminNav';
 import { loadAllGenPokemonNames } from '../../utils/pokemonGens';
+import { subwaySelectProps } from '../../utils/selectProps';
 
 const helper = createColumnHelper<Prize>();
 
@@ -134,7 +135,7 @@ export function ExclusivosPage() {
           </table>
         </div>
         <div className="d-none">
-          <Select isMulti options={pokemonOptions} />
+          <Select {...subwaySelectProps} isMulti options={pokemonOptions} />
         </div>
       </div>
     </>

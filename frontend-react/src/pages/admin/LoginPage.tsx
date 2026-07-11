@@ -38,11 +38,10 @@ export function LoginPage() {
   }
 
   return (
-    <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '100vh', backgroundColor: '#f7f7f7' }}>
-      <div className="card" style={{ width: '20rem' }}>
-        <div className="card-body">
-          <h5 className="card-title text-center">Login Admin</h5>
-          <form onSubmit={handleSubmit}>
+    <div className="page-shell d-flex justify-content-center align-items-center">
+      <div className="surface-card" style={{ width: '20rem' }}>
+        <h5 className="text-center mb-4">Login Admin</h5>
+        <form onSubmit={handleSubmit}>
             <div className="mb-3">
               <label htmlFor="username" className="form-label">Usuário</label>
               <input
@@ -67,7 +66,6 @@ export function LoginPage() {
             </div>
             <button type="submit" className="btn btn-primary w-100">Entrar</button>
           </form>
-        </div>
       </div>
     </div>
   );
