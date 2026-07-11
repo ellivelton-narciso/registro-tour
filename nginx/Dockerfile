@@ -1,8 +1,8 @@
 # Gateway HTTPS — Subway VPS (registro-tour + ev_counter)
 FROM nginx:alpine
 
-COPY nginx/nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY nginx/nginx.http-only.conf.template /etc/nginx/templates/http-only.conf.template
+COPY nginx/nginx.conf.template /etc/nginx/nginx-https.conf.template
+COPY nginx/nginx.http-only.conf.template /etc/nginx/nginx-http-only.conf.template
 COPY nginx/docker-entrypoint.sh /docker-entrypoint-custom.sh
 RUN chmod +x /docker-entrypoint-custom.sh
 
