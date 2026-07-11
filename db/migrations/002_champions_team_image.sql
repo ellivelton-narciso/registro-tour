@@ -3,16 +3,19 @@
 ALTER TABLE participants
     ADD COLUMN IF NOT EXISTS team_image VARCHAR(255) DEFAULT NULL;
 
-CREATE OR REPLACE VIEW v_trainers AS
+-- CREATE OR REPLACE não permite mudar ordem/nomes de colunas na view existente
+DROP VIEW IF EXISTS v_trainers;
+
+CREATE VIEW v_trainers AS
 SELECT
     p.id AS player_id,
     p.name,
     p.email,
     tr.id AS tournament_id,
     tr.name AS tournament_name,
+    array_agg(pk.name ORDER BY pk.name) FILTER (WHERE pk.name IS NOT NULL) AS pokemon_list,
     tr.gen AS tournament_gen,
-    pa.team_image,
-    array_agg(pk.name ORDER BY pk.name) FILTER (WHERE pk.name IS NOT NULL) AS pokemon_list
+    pa.team_image
 FROM participants pa
 JOIN players p ON pa.players_id = p.id
 JOIN tournaments tr ON pa.tournaments_id = tr.id

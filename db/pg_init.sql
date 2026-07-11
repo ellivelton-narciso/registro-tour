@@ -319,9 +319,9 @@ SELECT
     p.email,
     tr.id AS tournament_id,
     tr.name AS tournament_name,
+    array_agg(pk.name ORDER BY pk.name) FILTER (WHERE pk.name IS NOT NULL) AS pokemon_list,
     tr.gen AS tournament_gen,
-    pa.team_image,
-    array_agg(pk.name ORDER BY pk.name) FILTER (WHERE pk.name IS NOT NULL) AS pokemon_list
+    pa.team_image
 FROM participants pa
 JOIN players p ON pa.players_id = p.id
 JOIN tournaments tr ON pa.tournaments_id = tr.id
