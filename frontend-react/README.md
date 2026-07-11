@@ -4,6 +4,8 @@ Frontend em **React + TypeScript + Vite**, espelhando o `frontend/` legado (HTML
 
 ## Setup
 
+Requer **Node ^20.19.0 ou >=22.12.0** (Vite 8). Na VPS com nvm: `nvm install 22 && nvm alias default 22`.
+
 ```bash
 cd frontend-react
 cp .env.example .env

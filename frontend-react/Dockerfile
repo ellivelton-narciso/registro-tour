@@ -1,5 +1,6 @@
 # Build React + servir dist/ com nginx (SPA)
-FROM node:20-alpine AS build
+# Vite 8 exige Node ^20.19.0 || >=22.12.0 — não usar node:20-alpine genérico
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
