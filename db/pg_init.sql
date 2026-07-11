@@ -210,6 +210,7 @@ CREATE TABLE IF NOT EXISTS participants (
     empates INT DEFAULT 0,
     saldo INT DEFAULT 0,
     posicao INT DEFAULT NULL,
+    team_image VARCHAR(255) DEFAULT NULL,
     UNIQUE (tournaments_id, players_id)
 );
 
@@ -318,7 +319,9 @@ SELECT
     p.email,
     tr.id AS tournament_id,
     tr.name AS tournament_name,
-    array_agg(pk.name ORDER BY pk.name) AS pokemon_list
+    tr.gen AS tournament_gen,
+    pa.team_image,
+    array_agg(pk.name ORDER BY pk.name) FILTER (WHERE pk.name IS NOT NULL) AS pokemon_list
 FROM participants pa
 JOIN players p ON pa.players_id = p.id
 JOIN tournaments tr ON pa.tournaments_id = tr.id
@@ -329,7 +332,7 @@ LEFT JOIN pokemons pk
     ON pk.id = c.pokemons_id
    AND (pk.af = c.pokemons_af OR (c.pokemons_af IS NULL AND (pk.af IS NULL OR pk.af = '')))
 WHERE tr.dateend IS NULL
-GROUP BY p.id, p.name, p.email, tr.id, tr.name;
+GROUP BY p.id, p.name, p.email, tr.id, tr.name, tr.gen, pa.team_image;
 
 
 --  VIEW: CONFIG (DADOS DO ÚLTIMO TORNEIO)

@@ -3,3 +3,5 @@
 k8s/
 node_modules/
 dist/
+uploads/team-images/*
+!uploads/team-images/.gitkeep

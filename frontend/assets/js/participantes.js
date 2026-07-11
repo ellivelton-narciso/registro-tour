@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const urlBE = localStorage.getItem('urlBE')
-    let currentTournamentId = null; 
+    let currentTournamentId = null;
+    let isChampionsMode = false;
 
     function authHeaders() {
         return {
@@ -27,6 +28,17 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         currentTournamentId = config.id;
+        isChampionsMode = Number(config.gen) === 9;
+        if (isChampionsMode) {
+            document.getElementById('pokemon-different-card').style.display = 'none';
+            document.getElementById('ranking-section').style.display = 'none';
+            document.querySelector('#pokemonTable thead tr').innerHTML = `
+                <th>Nome</th>
+                <th>Contato</th>
+                <th>Time (Champions)</th>
+            `;
+        }
+        getTrainers();
     });
 
     function getTrainers() {
@@ -43,13 +55,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Erro ao obter os dados dos treinadores:', data.error);
             } else {
                 const qtdRegistros = data.length;
-                const qtdDiferentes = getUniquePokemonCount(data);
-
                 document.getElementById('qtdRegistros').innerText = qtdRegistros;
-                document.getElementById('qtdDiferentes').innerText = qtdDiferentes;
+
+                if (!isChampionsMode) {
+                    const qtdDiferentes = getUniquePokemonCount(data);
+                    document.getElementById('qtdDiferentes').innerText = qtdDiferentes;
+                    populateRankingTable(data);
+                }
 
                 populatePokemonTable(data);
-                populateRankingTable(data);
             }
         })
         .catch(error => {
@@ -90,7 +104,20 @@ document.addEventListener('DOMContentLoaded', function () {
             row.appendChild(emailCell);
 
             const pokemonCell = document.createElement('td');
-            pokemonCell.textContent = trainer.pokemonList.join(', ');
+            if (isChampionsMode) {
+                if (trainer.teamImage) {
+                    const link = document.createElement('a');
+                    link.href = `${urlBE}/team-images/${trainer.teamImage}`;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = 'Ver print do time';
+                    pokemonCell.appendChild(link);
+                } else {
+                    pokemonCell.textContent = '—';
+                }
+            } else {
+                pokemonCell.textContent = trainer.pokemonList.join(', ');
+            }
             row.appendChild(pokemonCell);
 
             tableBody.appendChild(row);
@@ -204,5 +231,4 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
 
-    getTrainers();
 });

@@ -1,0 +1,21 @@
+# registro-tour backend — Express
+# PostgreSQL externo (mesmo banco do Hub). Imagens Champions no volume team-images.
+
+services:
+  api:
+    build: .
+    env_file:
+      - .env
+    environment:
+      TEAM_IMAGES_DIR: /data/team-images
+      PORT: "3000"
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - team-images:/data/team-images
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  team-images:

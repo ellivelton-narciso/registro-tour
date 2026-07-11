@@ -9,7 +9,91 @@ $(document).ready(function () {
   let enviardiscord = false;
   let playerPrizePokemonNames = [];
   let currentTournamentGen = null;
+  let isChampionsMode = false;
+  let selectedTeamFile = null;
   const urlBE = localStorage.getItem('urlBE');
+
+  function isChampionsGen(gen) {
+    return Number(gen) === 9;
+  }
+
+  function setupChampionsUI(config) {
+    isChampionsMode = isChampionsGen(config.gen);
+    if (!isChampionsMode) return;
+
+    $('#pokemon-selection-section').hide();
+    $('#pokemon-list').prop('required', false);
+    $('label[for="monotype-list"]').hide();
+    $('#monotype-list').hide().prop('required', false);
+    $('label[for="codigo"]').hide();
+    $('#codigo').hide();
+
+    $('#champions-upload-section').show();
+    $('#team-image').prop('required', true);
+    $('#labelTeamUpload').text('Envie um print do seu time no Pokémon Champions');
+  }
+
+  $('#team-image').on('change', function () {
+    const file = this.files && this.files[0];
+    selectedTeamFile = file || null;
+    if (!file) {
+      $('#team-image-preview').hide();
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      $('#team-image-preview-img').attr('src', e.target.result);
+      $('#team-image-preview').show();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  async function uploadTeamImage(file) {
+    const formData = new FormData();
+    formData.append('teamImage', file);
+    const response = await fetch(`${urlBE}/upload-team-image`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Erro ao enviar imagem do time.');
+    }
+    return data;
+  }
+
+  function submitRegistration(payload) {
+    return fetch(`${urlBE}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.message) {
+          Swal.fire({ icon: 'success', title: 'Formulário Enviado', text: data.message });
+          $('#name').val('');
+          $('#email').val('');
+          $('#pokemon-list').val([]).trigger('change');
+          $('#team-image').val('');
+          selectedTeamFile = null;
+          $('#team-image-preview').hide();
+          if (enviardiscord) {
+            fetch(discordURL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: `Novo registro: ${payload.name}` })
+            });
+          }
+        } else {
+          Swal.fire({ icon: 'error', title: 'Erro no Envio', text: data.error || 'Algo deu errado.' });
+        }
+      })
+      .catch(err => {
+        Swal.fire({ icon: 'error', title: 'Erro de Conexão', text: err.message || 'Não foi possível conectar ao servidor.' });
+        console.error(err);
+      });
+  }
 
   function debounce(func, delay) {
     let timer;
@@ -203,12 +287,19 @@ $(document).ready(function () {
     sprites = config.sprites ?? 'emerald';
     qtdEscolha = config.qtdescolha ?? 10;
 
-    $('title').text(config.titulo);
-    $('#title2').text(config.titulo2);
-    $('#labelSelect').text(`Selecione até ${qtdEscolha} Pokémon`);
+    setupChampionsUI(config);
 
-    await carregarPokemons(config.gen ?? 3);
+    if (!isChampionsMode) {
+      $('title').text(config.titulo);
+      $('#title2').text(config.titulo2);
+      $('#labelSelect').text(`Selecione até ${qtdEscolha} Pokémon`);
+      await carregarPokemons(config.gen ?? 3);
+    } else {
+      $('title').text(config.titulo);
+      $('#title2').text(config.titulo2);
+    }
 
+    if (!isChampionsMode) {
     $('#codigo').on('input', debounce(function () {
       const codigo = $(this).val().trim();
       if (codigo) {
@@ -272,6 +363,7 @@ $(document).ready(function () {
 
     const tipoSelecionado = config.monotype ? $('#monotype-list').val() : null;
     renderPokemonList(tipoSelecionado);
+    }
   })
   .catch(err => {
     Swal.fire({ icon: 'error', title: 'Erro de Conexão', text: 'Não foi possível carregar as configurações do servidor.' });
@@ -283,9 +375,47 @@ $('#simpleForm').on('submit', function (event) {
   event.preventDefault();
   const name = $('#name').val().trim();
   const email = $('#email').val().trim();
+
+  if (!name || !email) {
+    Swal.fire({ icon: 'error', title: 'Campos Obrigatórios', text: 'Preencha nick e contato.' });
+    return;
+  }
+
+  if (isChampionsMode) {
+    if (!selectedTeamFile) {
+      Swal.fire({ icon: 'error', title: 'Imagem Obrigatória', text: 'Envie um print do seu time no Pokémon Champions.' });
+      return;
+    }
+
+    const previewUrl = $('#team-image-preview-img').attr('src');
+    Swal.fire({
+      icon: 'info',
+      title: 'Confirmar seu time',
+      html: `<p>Confirme se este é o time que deseja cadastrar, com <strong>moves e itens corretos</strong>:</p>
+             <img src="${previewUrl}" style="max-width:100%; border-radius:8px; margin-top:10px;">`,
+      showCancelButton: true,
+      confirmButtonText: 'Confirmar',
+      cancelButtonText: 'Cancelar'
+    }).then(async result => {
+      if (!result.isConfirmed) return;
+      try {
+        const uploadResult = await uploadTeamImage(selectedTeamFile);
+        await submitRegistration({
+          tournamentId,
+          name,
+          email,
+          teamImage: uploadResult.filename
+        });
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Erro no Upload', text: err.message });
+      }
+    });
+    return;
+  }
+
   const pokemonList = $('#pokemon-list').val();
 
-  if (!name || !email || !pokemonList.length) {
+  if (!pokemonList.length) {
     Swal.fire({ icon: 'error', title: 'Campos Obrigatórios', text: 'Preencha todos os campos.' });
     return;
   }
@@ -316,31 +446,7 @@ $('#simpleForm').on('submit', function (event) {
         return { id: p.id, af: p.af || '' };
       });
 
-      fetch(`${urlBE}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentId, name, email, pokemonList: pokemonPayload })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.message) {
-            Swal.fire({ icon: 'success', title: 'Formulário Enviado', text: data.message });
-            $('#name').val(''); $('#email').val(''); $('#pokemon-list').val([]).trigger('change');
-            if (enviardiscord) {
-              fetch(discordURL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: `Novo registro: ${name}` })
-              })
-            }
-          } else {
-            Swal.fire({ icon: 'error', title: 'Erro no Envio', text: data.error || 'Algo deu errado.' });
-          }
-        })
-        .catch(err => {
-          Swal.fire({ icon: 'error', title: 'Erro de Conexão', text: 'Não foi possível conectar ao servidor.' });
-          console.error(err);
-        });
+      submitRegistration({ tournamentId, name, email, pokemonList: pokemonPayload });
     }
   });
 });

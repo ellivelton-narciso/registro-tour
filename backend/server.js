@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const axios = require('axios');
@@ -6,22 +7,56 @@ const pool = require('./db/connection');
 const auth = require('./authMiddleware');
 const cupKnockout = require('./cupKnockout');
 const tournamentFees = require('./tournamentFees');
+const { upload, getTeamImagesDir, isChampionsGen, resolveTeamImagePath } = require('./championsUpload');
+const { sendChampionsTeamsToDiscord } = require('./championsDiscord');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.use('/team-images', express.static(getTeamImagesDir()));
+
+app.post('/upload-team-image', upload.single('teamImage'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhuma imagem enviada.' });
+  }
+  return res.status(200).json({
+    filename: req.file.filename,
+    url: `/team-images/${req.file.filename}`
+  });
+});
 
 app.post('/submit', async (req, res) => {
-  const { name, email, pokemonList, tournamentId } = req.body;
-  if (!name || !pokemonList || !tournamentId) {
+  const { name, email, pokemonList, tournamentId, teamImage } = req.body;
+  if (!name || !tournamentId) {
     return res.status(400).json({ error: 'Dados inválidos. Preencha todos os campos obrigatórios.' });
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    const tournamentResult = await client.query(
+      'SELECT id, gen, paymentregister FROM tournaments WHERE id = $1',
+      [tournamentId]
+    );
+    if (tournamentResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Torneio não encontrado.' });
+    }
+    const tournament = tournamentResult.rows[0];
+    const championsMode = isChampionsGen(tournament.gen);
+
+    if (championsMode) {
+      if (!teamImage || !resolveTeamImagePath(teamImage)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Envie um print do seu time antes de confirmar a inscrição.' });
+      }
+    } else if (!pokemonList || !pokemonList.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Dados inválidos. Preencha todos os campos obrigatórios.' });
+    }
 
     const playerResult = await client.query(
       'SELECT * FROM players WHERE name = $1',
@@ -49,15 +84,6 @@ app.post('/submit', async (req, res) => {
       return res.status(400).json({ error: 'Jogador já cadastrado neste torneio.' });
     }
 
-    const tournamentResult = await client.query(
-      'SELECT paymentregister FROM tournaments WHERE id = $1',
-      [tournamentId]
-    );
-    if (tournamentResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Torneio não encontrado.' });
-    }
-    const tournament = tournamentResult.rows[0];
     const baseFee = tournament.paymentregister ?? tournament.paymentRegister ?? 0;
 
     const feeInfo = await tournamentFees.resolveRegistrationFee(
@@ -83,28 +109,31 @@ app.post('/submit', async (req, res) => {
     );
 
     const participantInsert = await client.query(
-      'INSERT INTO participants (tournaments_id, players_id) VALUES ($1, $2) RETURNING id',
-      [tournamentId, player.id]
+      championsMode
+        ? 'INSERT INTO participants (tournaments_id, players_id, team_image) VALUES ($1, $2, $3) RETURNING id'
+        : 'INSERT INTO participants (tournaments_id, players_id) VALUES ($1, $2) RETURNING id',
+      championsMode ? [tournamentId, player.id, path.basename(teamImage)] : [tournamentId, player.id]
     );
     const participantId = participantInsert.rows[0].id;
 
-    const values = [];
-    const conditions = pokemonList.map((p, i) => {
-      values.push(p.id, p.af);
-      return `($${values.length-1}, $${values.length})`;
-    }).join(',');
+    if (!championsMode) {
+      const values = [];
+      const conditions = pokemonList.map((p) => {
+        values.push(p.id, p.af);
+        return `($${values.length-1}, $${values.length})`;
+      }).join(',');
 
-    const pokemonsResult = await client.query(
-      `SELECT id, name, af FROM pokemons WHERE (id, af) IN (${conditions})`,
-      values
-    );
-
-
-    for (const poke of pokemonsResult.rows) {
-      await client.query(
-        'INSERT INTO choices (participants_id, pokemons_id, tournaments_id) VALUES ($1, $2, $3)',
-        [participantId, poke.id, tournamentId]
+      const pokemonsResult = await client.query(
+        `SELECT id, name, af FROM pokemons WHERE (id, af) IN (${conditions})`,
+        values
       );
+
+      for (const poke of pokemonsResult.rows) {
+        await client.query(
+          'INSERT INTO choices (participants_id, pokemons_id, tournaments_id) VALUES ($1, $2, $3)',
+          [participantId, poke.id, tournamentId]
+        );
+      }
     }
 
     await client.query('COMMIT');
@@ -261,9 +290,23 @@ app.post('/createTournament', auth, async (req, res) => {
   } = req.body;
 
   // Validação básica
-  if (!titulo || !gen || !sprites || !qtdLimitado) {
+  const championsMode = isChampionsGen(gen);
+  if (!titulo || !gen) {
     return res.status(400).json({ error: 'Campos obrigatórios não preenchidos.' });
   }
+  if (!championsMode && (!sprites || !qtdLimitado)) {
+    return res.status(400).json({ error: 'Campos obrigatórios não preenchidos.' });
+  }
+
+  const resolvedSprites = championsMode ? 'champions' : sprites;
+  const resolvedQtdLimitado = championsMode ? 0 : qtdLimitado;
+  const resolvedQtdLimitadoLendario = championsMode ? 0 : (qtdLimitadoLendario || null);
+  const resolvedQtdEscolha = championsMode ? null : (qtdEscolha || null);
+  const resolvedListaLimitado = championsMode ? [] : (listaLimitado || []);
+  const resolvedListaLimitadoLendario = championsMode ? [] : (listaLimitadoLendario || []);
+  const resolvedListaBanido = championsMode ? [] : (listaBanido || []);
+  const resolvedPrizes = championsMode ? false : (prizes || false);
+  const resolvedMonotype = championsMode ? false : (monotype || false);
 
   try {
     const query = `
@@ -294,18 +337,18 @@ app.post('/createTournament', auth, async (req, res) => {
       titulo,
       titulo2 || '',
       gen,
-      sprites,
-      qtdEscolha || null,
-      qtdLimitado,
-      qtdLimitadoLendario || null,
+      resolvedSprites,
+      resolvedQtdEscolha,
+      resolvedQtdLimitado,
+      resolvedQtdLimitadoLendario,
       hook || '',
       enviarDiscord || false,
-      listaLimitado || [],
-      listaLimitadoLendario || [],
-      listaBanido || [],
+      resolvedListaLimitado,
+      resolvedListaLimitadoLendario,
+      resolvedListaBanido,
       encerrado || false,
-      prizes || false,
-      monotype || false,
+      resolvedPrizes,
+      resolvedMonotype,
       paymentRegister || 50
     ];
 
@@ -345,11 +388,38 @@ app.post('/updateConfig', auth, async (req, res) => {
     dateEnd
   } = req.body;
 
-  if (!tournamentId || !titulo || !gen || !sprites || !qtdLimitado) {
+  if (!tournamentId || !titulo || !gen) {
     return res.status(400).json({ error: 'Campos obrigatórios não preenchidos.' });
   }
 
+  const championsMode = isChampionsGen(gen);
+  if (!championsMode && (!sprites || !qtdLimitado)) {
+    return res.status(400).json({ error: 'Campos obrigatórios não preenchidos.' });
+  }
+
+  const resolvedSprites = championsMode ? 'champions' : sprites;
+  const resolvedQtdLimitado = championsMode ? 0 : qtdLimitado;
+  const resolvedQtdLimitadoLendario = championsMode ? 0 : (qtdLimitadoLendario || null);
+  const resolvedQtdEscolha = championsMode ? null : (qtdEscolha || null);
+  const resolvedListaLimitado = championsMode ? [] : (listaLimitado || []);
+  const resolvedListaLimitadoLendario = championsMode ? [] : (listaLimitadoLendario || []);
+  const resolvedListaBanido = championsMode ? [] : (listaBanido || []);
+  const resolvedPrizes = championsMode ? false : (prizes || false);
+  const resolvedMonotype = championsMode ? false : (monotype || false);
+
+  const client = await pool.connect();
   try {
+    const previousState = await client.query(
+      'SELECT encerrado, gen FROM tournaments WHERE id = $1',
+      [tournamentId]
+    );
+    if (previousState.rows.length === 0) {
+      return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    const wasOpen = !previousState.rows[0].encerrado;
+    const isClosing = Boolean(encerrado) && wasOpen;
+
     const query = `
       UPDATE tournaments SET
         name = $1,
@@ -376,33 +446,44 @@ app.post('/updateConfig', auth, async (req, res) => {
       titulo,
       titulo2 || '',
       gen,
-      sprites,
-      qtdEscolha || null,
-      qtdLimitado,
-      qtdLimitadoLendario || null,
+      resolvedSprites,
+      resolvedQtdEscolha,
+      resolvedQtdLimitado,
+      resolvedQtdLimitadoLendario,
       hook || '',
       enviarDiscord || false,
-      listaLimitado || [],
-      listaLimitadoLendario || [],
-      listaBanido || [],
+      resolvedListaLimitado,
+      resolvedListaLimitadoLendario,
+      resolvedListaBanido,
       encerrado || false,
-      prizes || false,
-      monotype || false,
+      resolvedPrizes,
+      resolvedMonotype,
       paymentRegister || 50,
       dateEnd || null,
       tournamentId
     ];
 
-    const result = await pool.query(query, values);
+    const result = await client.query(query, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Torneio não encontrado.' });
+    }
+
+    if (isClosing && championsMode && hook && enviarDiscord) {
+      try {
+        const discordResult = await sendChampionsTeamsToDiscord(client, tournamentId, hook);
+        console.log(`Champions Discord: ${discordResult.sent} imagens enviadas, ${discordResult.skipped} ignoradas.`);
+      } catch (discordErr) {
+        console.error('Erro ao enviar times Champions ao Discord:', discordErr);
+      }
     }
 
     return res.status(200).json({ message: 'Configurações do torneio atualizadas com sucesso!' });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Erro ao atualizar o torneio.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1671,7 +1752,9 @@ app.get('/getTrainers', auth, async (req, res) => {
         email: trainer.email,
         tournamentId: trainer.tournament_id,
         tournamentName: trainer.tournament_name,
-        pokemonList
+        tournamentGen: trainer.tournament_gen,
+        teamImage: trainer.team_image,
+        pokemonList: pokemonList.filter(Boolean)
       };
     });
 
@@ -1928,6 +2011,19 @@ app.get('/pokemons', async (req, res) => {
 
 
 
+
+app.use((err, _req, res, next) => {
+  if (err && err.name === 'MulterError') {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'Imagem muito grande. Máximo 5 MB.'
+      : 'Erro no upload da imagem.';
+    return res.status(400).json({ error: message });
+  }
+  if (err) {
+    return res.status(400).json({ error: err.message || 'Erro na requisição.' });
+  }
+  return next();
+});
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Servidor rodando na porta ${port}`));

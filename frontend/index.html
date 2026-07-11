@@ -45,7 +45,15 @@
         </select>
       </div>
 
-      <div class="mb-3">
+      <div class="mb-3" id="champions-upload-section" style="display:none;">
+        <label for="team-image" class="form-label" id="labelTeamUpload">Envie um print do seu time no Pokémon Champions</label>
+        <input type="file" class="form-control" id="team-image" accept="image/png,image/jpeg,image/webp">
+        <small class="text-muted">Tire um screenshot do seu time com moves e itens visíveis. PNG, JPEG ou WebP (máx. 5 MB).</small>
+        <div id="team-image-preview" class="mt-3" style="display:none;">
+          <img id="team-image-preview-img" alt="Preview do time" style="max-width:100%; border-radius:8px; border:1px solid #dee2e6;">
+        </div>
+      </div>
+      <div class="mb-3" id="pokemon-selection-section">
         <label for="pokemon-list" class="form-label" id="labelSelect">Selecione até 10 Pokémon</label>
         <select class="form-select" id="pokemon-list" multiple required></select>
       </div>

@@ -14,6 +14,17 @@ $(document).ready(function () {
     let primeiraGen, segundaGen, terceiraGen, quartaGen, quintaGen, allPokes = [];
     const lendariosBanidos = [];
 
+    function isChampionsGen(gen) {
+        return Number(gen) === 9;
+    }
+
+    function toggleChampionsMode(gen) {
+        const champions = isChampionsGen(gen);
+        $('#standard-tournament-fields').toggle(!champions);
+        $('#prizes-field').toggle(!champions);
+        $('#monotype-field').toggle(!champions);
+    }
+
     $('#limitados-list, #ban-list, #legendary-list').select2({
         placeholder: "Selecione os Pokémon",
         width: '100%'
@@ -108,7 +119,10 @@ $(document).ready(function () {
 
                 const gen = parseInt(data.gen || 1);
                 currentTournamentId = data.id;
-                await carregarGens(gen);
+                toggleChampionsMode(gen);
+                if (!isChampionsGen(gen)) {
+                    await carregarGens(gen);
+                }
 
                 $('#limitados-list').val(data.listalimitado || []).trigger('change');
                 $('#legendary-list').val(data.listalimitadolendario || []).trigger('change');
@@ -127,7 +141,10 @@ $(document).ready(function () {
     // Atualizar lista ao mudar a geração
     $('#generation').on('change', function () {
         const selectedGen = parseInt($(this).val());
-        carregarGens(selectedGen);
+        toggleChampionsMode(selectedGen);
+        if (!isChampionsGen(selectedGen)) {
+            carregarGens(selectedGen);
+        }
     });
 
     $('#submitConfig').on('click', function (event) {
