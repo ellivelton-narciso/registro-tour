@@ -34,39 +34,49 @@ EV_COUNTER_ENV_FILE=../Subway-Ev-Counter/.env
 2. `backend/.env` com PostgreSQL e `JWT_SECRET`.
 3. `Subway-Ev-Counter/.env` com `DATABASE_URL`.
 4. Copiar `.env.example` → `.env` na raiz e ajustar domínios + `VITE_API_URL`.
-5. Subir apps (nginx ainda sem certificado ou só :80):
+5. Subir apps (sem HTTPS ainda — nginx entra em modo bootstrap HTTP):
 
 ```bash
 cd ~/registro-tour
 docker compose up -d --build api frontend ev-counter
 ```
 
-6. **Parar Apache** antes de emitir certificado (porta 80 tem de ser do nginx Docker):
+6. **Parar Apache** (porta 80 livre para nginx + certbot):
 
 ```bash
 sudo systemctl stop apache2
-docker compose up -d nginx
+docker compose up -d --build nginx
+docker compose logs nginx
+# deve mostrar: "modo HTTP-only (bootstrap)"
 ```
 
-7. Emitir certificado Let's Encrypt (HTTP-01 — um cert multi-domínio):
+7. Emitir certificado Let's Encrypt (HTTP-01 via webroot):
 
 ```bash
 docker compose run --rm certbot certonly \
   --webroot -w /var/www/certbot \
-  -d ds.subway.vako.pt \
-  -d api-registro.subway.vako.pt \
-  -d ev-counter.subway.vako.pt \
+  -d registro-ds.vako.pt \
+  -d SEU_DOMINIO_API \
+  -d SEU_DOMINIO_EV_COUNTER \
   --email SEU_EMAIL@exemplo.com \
   --agree-tos \
   --no-eff-email
 ```
 
-(Ajuste os `-d` aos domínios reais do `.env`.)
+(Ajuste os `-d` aos domínios reais do `.env` — `SSL_CERT_DIR` deve ser o **primeiro** `-d`.)
 
-8. Stack completa com HTTPS:
+8. Reiniciar nginx (deteta certificado e passa a HTTPS):
 
 ```bash
-docker compose up -d --build
+docker compose up -d --build nginx
+docker compose logs nginx
+# deve mostrar: "certificado encontrado — modo HTTPS"
+```
+
+9. Stack completa:
+
+```bash
+docker compose up -d
 ```
 
 9. Validar os três hosts no browser. Só então desativar Apache de forma permanente:
@@ -76,6 +86,17 @@ sudo a2dissite ds-front ds-front-le-ssl api-registro ev-counter ev-counter-le-ss
 # manter desabilitados os sites já off (underground, torneio-capo, public-placar)
 sudo systemctl disable apache2   # opcional, após período de observação
 ```
+
+## Certificados já existentes no Apache
+
+Se o Apache já emitiu certs em `/etc/letsencrypt/live/registro-ds.vako.pt/` (ou o teu `SSL_CERT_DIR`), podes reutilizá-los **sem novo certbot** montando o host no compose (temporário ou permanente):
+
+```yaml
+# em docker-compose.yml, serviços nginx e certbot — trocar o volume nomeado por:
+- /etc/letsencrypt:/etc/letsencrypt
+```
+
+Depois `docker compose up -d --build nginx` — o entrypoint deteta o cert e sobe em HTTPS.
 
 ## Renovação
 
