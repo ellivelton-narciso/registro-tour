@@ -49,11 +49,13 @@ services:
       SUBWAY_DOMAIN_FRONTEND: ${DOMAIN_FRONTEND:?Defina DOMAIN_FRONTEND no .env}
       SUBWAY_DOMAIN_API: ${DOMAIN_API:?Defina DOMAIN_API no .env}
       SUBWAY_DOMAIN_EV_COUNTER: ${DOMAIN_EV_COUNTER:?Defina DOMAIN_EV_COUNTER no .env}
-      SSL_CERT_DIR: ${SSL_CERT_DIR:-${DOMAIN_FRONTEND}}
+      SSL_CERT_DIR_FRONTEND: ${SSL_CERT_DIR_FRONTEND:-registro-ds.vako.pt}
+      SSL_CERT_DIR_API: ${SSL_CERT_DIR_API:-api.registro-oldgen.vako.pt}
+      SSL_CERT_DIR_EV_COUNTER: ${SSL_CERT_DIR_EV_COUNTER:-ev-counter.vako.pt}
       FRONTEND_UPSTREAM: ${FRONTEND_UPSTREAM:-frontend:80}
     volumes:
       - certbot-www:/var/www/certbot:ro
-      - certbot-certs:/etc/letsencrypt:ro
+      - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
     depends_on:
       - api
       - frontend
@@ -64,11 +66,10 @@ services:
     image: certbot/certbot:latest
     volumes:
       - certbot-www:/var/www/certbot
-      - certbot-certs:/etc/letsencrypt
+      - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt
     entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $$!; done;"
     restart: unless-stopped
 
 volumes:
   team-images:
   certbot-www:
-  certbot-certs:

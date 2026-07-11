@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-cert="/etc/letsencrypt/live/${SSL_CERT_DIR}/fullchain.pem"
+cert_dir="${SSL_CERT_DIR_FRONTEND:-${SSL_CERT_DIR}}"
+cert="/etc/letsencrypt/live/${cert_dir}/fullchain.pem"
 
 # Só um .template em /etc/nginx/templates/ — evita upstream duplicado no envsubst
 mkdir -p /etc/nginx/templates

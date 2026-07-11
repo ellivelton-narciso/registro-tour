@@ -1,8 +1,5 @@
 # Gateway HTTPS — Subway VPS (registro-tour + ev_counter)
-# ${SUBWAY_DOMAIN_FRONTEND}   → ${FRONTEND_UPSTREAM} (nginx estático no container frontend)
-# ${SUBWAY_DOMAIN_API}        → api:3000
-# ${SUBWAY_DOMAIN_EV_COUNTER} → ev-counter:3000 (Next.js standalone)
-# ${SSL_CERT_DIR}             → pasta em /etc/letsencrypt/live/
+# Cada domínio pode ter o seu certificado em /etc/letsencrypt/live/ (Apache já emitiu separados)
 
 map $http_upgrade $connection_upgrade {
     default upgrade;
@@ -42,8 +39,8 @@ server {
     http2 on;
     server_name ${SUBWAY_DOMAIN_FRONTEND};
 
-    ssl_certificate /etc/letsencrypt/live/${SSL_CERT_DIR}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${SSL_CERT_DIR}/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/${SSL_CERT_DIR_FRONTEND}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${SSL_CERT_DIR_FRONTEND}/privkey.pem;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:10m;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -75,8 +72,8 @@ server {
     http2 on;
     server_name ${SUBWAY_DOMAIN_API};
 
-    ssl_certificate /etc/letsencrypt/live/${SSL_CERT_DIR}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${SSL_CERT_DIR}/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/${SSL_CERT_DIR_API}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${SSL_CERT_DIR_API}/privkey.pem;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:10m;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -109,8 +106,8 @@ server {
     http2 on;
     server_name ${SUBWAY_DOMAIN_EV_COUNTER};
 
-    ssl_certificate /etc/letsencrypt/live/${SSL_CERT_DIR}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${SSL_CERT_DIR}/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/${SSL_CERT_DIR_EV_COUNTER}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${SSL_CERT_DIR_EV_COUNTER}/privkey.pem;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:10m;
     ssl_protocols TLSv1.2 TLSv1.3;
