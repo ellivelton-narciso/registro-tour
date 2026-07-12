@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 
 const links = [
@@ -9,6 +10,8 @@ const links = [
 ];
 
 export function AdminNav() {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
       <div className="container-fluid">
@@ -16,15 +19,14 @@ export function AdminNav() {
         <button
           className="navbar-toggler"
           type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
           aria-controls="navbarNav"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
+          aria-expanded={expanded}
+          aria-label="Abrir menu"
+          onClick={() => setExpanded((open) => !open)}
         >
           <span className="navbar-toggler-icon" />
         </button>
-        <div className="collapse navbar-collapse" id="navbarNav">
+        <div className={`collapse navbar-collapse${expanded ? ' show' : ''}`} id="navbarNav">
           <ul className="navbar-nav">
             {links.map((link) => (
               <li className="nav-item" key={link.to}>
@@ -32,6 +34,7 @@ export function AdminNav() {
                   to={link.to}
                   end={link.end}
                   className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                  onClick={() => setExpanded(false)}
                 >
                   {link.label}
                 </NavLink>
