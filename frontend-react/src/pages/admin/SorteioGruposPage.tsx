@@ -57,6 +57,8 @@ export function SorteioGruposPage() {
   const loadParticipants = useCallback(async (tid: number, formato: FormatoCopa) => {
     const data = await apiFetch<TournamentParticipant[]>(`/getTournamentParticipants?tournamentId=${tid}`, { auth: true });
     setParticipants(data);
+    // Fonte de verdade da lista — mantém o input alinhado mesmo se getCupSetup falhar no casing.
+    setForm((f) => ({ ...f, qtdParticipantes: data.length }));
     if (!data.length) {
       setHint('Nenhum participante encontrado para este torneio.');
       return;

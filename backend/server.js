@@ -602,17 +602,26 @@ app.get('/getCupSetup', auth, async (req, res) => {
     );
 
     const row = tournamentResult.rows[0];
-    const qtdParticipantes = participantsResult.rows[0].qtdparticipantes
-      ?? participantsResult.rows[0].qtdParticipantes
+    const participantsRow = participantsResult.rows[0] || {};
+    const qtdParticipantes = participantsRow.qtdparticipantes
+      ?? participantsRow.qtdParticipantes
+      ?? 0;
+    const qtdGruposComSorteio = participantsRow.qtdgruposcomsorteio
+      ?? participantsRow.qtdGruposComSorteio
       ?? 0;
     const qtdClassificados = row.qtdclassificados ?? row.qtdClassificados ?? null;
     const minRodadasSuico = cupSwiss.minimumSwissRounds(qtdParticipantes, qtdClassificados);
     const rodadasSuicoAutomaticas = cupSwiss.recommendedSwissRounds(qtdParticipantes, qtdClassificados);
 
+    // node-pg lowercases unquoted aliases; expose camelCase for the admin UI.
     return res.status(200).json({
-      ...row,
+      qtdGrupos: row.qtdgrupos ?? row.qtdGrupos ?? null,
+      qtdClassificados,
+      formatoMataMata: row.formatomatamata ?? row.formatoMataMata ?? null,
+      qtdRodadasSuico: row.qtdrodadassuico ?? row.qtdRodadasSuico ?? null,
       formatoCopa: readFormatoCopa(row),
-      ...participantsResult.rows[0],
+      qtdParticipantes,
+      qtdGruposComSorteio,
       minRodadasSuico,
       rodadasSuicoAutomaticas
     });
