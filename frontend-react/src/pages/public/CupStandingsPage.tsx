@@ -54,7 +54,14 @@ export function CupStandingsPage() {
     setData(res);
     setState('standings');
     setSubtitle(subtitleText);
-    setLastUpdated(`Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`);
+    setLastUpdated(
+      `Atualizado às ${new Date().toLocaleTimeString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })}`
+    );
   }, []);
 
   useEffect(() => {
