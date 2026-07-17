@@ -179,7 +179,7 @@ app.get('/public/cupStandings', async (req, res) => {
   try {
     const tournamentRes = await client.query(
       `
-      SELECT id, name, titulo2, qtdClassificados, formatoCopa, dateEnd
+      SELECT id, name, titulo2, gen, qtdClassificados, formatoCopa, dateEnd
       FROM tournaments
       WHERE dateEnd IS NULL
       ORDER BY dateStart DESC, id DESC
@@ -196,11 +196,16 @@ app.get('/public/cupStandings', async (req, res) => {
     const qtdClassificados =
       tournament.qtdclassificados ?? tournament.qtdClassificados ?? 2;
     const formatoCopa = readFormatoCopa(tournament);
+    const championsMode = isChampionsGen(tournament.gen);
 
     let standings = [];
     let hasGroups = false;
 
-    if (formatoCopa === 'swiss') {
+    if (formatoCopa === 'knockout') {
+      // Só mata-mata: sem fase de grupos/suíço.
+      standings = [];
+      hasGroups = false;
+    } else if (formatoCopa === 'swiss') {
       const swissData = await cupSwiss.fetchSwissStandings(client, tournamentId, qtdClassificados);
       standings = swissData.standings;
       hasGroups = standings.length > 0 && (await cupSwiss.getSwissState(client, tournamentId)).hasSwiss;
@@ -261,17 +266,46 @@ app.get('/public/cupStandings', async (req, res) => {
       [tournamentId]
     );
 
+    let participants = [];
+    if (championsMode) {
+      const participantsRes = await client.query(
+        `
+        SELECT
+          pa.id AS participant_id,
+          p.id AS player_id,
+          p.name,
+          pa.team_image AS "teamImage"
+        FROM participants pa
+        JOIN players p ON p.id = pa.players_id
+        WHERE pa.tournaments_id = $1
+        ORDER BY p.name
+        `,
+        [tournamentId]
+      );
+      participants = participantsRes.rows.map((row) => ({
+        participant_id: row.participant_id,
+        player_id: row.player_id,
+        name: row.name,
+        teamImage: row.teamImage ?? row.teamimage ?? null
+      }));
+    }
+
+    const hasKnockout = knockoutRes.rows.length > 0;
+
     return res.status(200).json({
       active: true,
       tournamentId,
       tournamentName: tournament.name,
       titulo2: tournament.titulo2,
       formatoCopa,
+      championsMode,
       qtdClassificados,
       hasGroups,
+      hasPublishedContent: hasGroups || hasKnockout,
       standings,
+      participants,
       knockout: {
-        hasKnockout: knockoutRes.rows.length > 0,
+        hasKnockout,
         cupFinished: finalWinnerRes.rows[0].n > 0,
         matches: knockoutRes.rows
       }

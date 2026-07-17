@@ -107,13 +107,25 @@ export interface TournamentParticipant {
   grupo?: string | null;
 }
 
+export interface PublicCupParticipant {
+  participant_id: number;
+  player_id: number;
+  name: string;
+  teamImage?: string | null;
+}
+
 export interface PublicCupStandings {
   active: boolean;
   hasGroups: boolean;
+  hasPublishedContent?: boolean;
+  formatoCopa?: 'groups' | 'swiss' | 'knockout' | string;
+  championsMode?: boolean;
   titulo?: string;
+  titulo2?: string;
   tournamentName?: string;
   qtdClassificados?: number;
   standings: StandingRow[];
+  participants?: PublicCupParticipant[];
   knockout?: {
     hasKnockout: boolean;
     matches: TournamentMatch[];

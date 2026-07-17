@@ -1,16 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { apiFetch } from '../../api/client';
+import { API_URL, apiFetch } from '../../api/client';
 import type { PublicCupStandings, TournamentConfig } from '../../api/types';
 import { CupStandingsByGroup } from '../../components/cup/CupStandingsByGroup';
 import { KnockoutBracket } from '../../components/cup/KnockoutBracket';
 
 const REFRESH_MS = 60_000;
 
+function waitingMessage(formatoCopa?: string) {
+  if (formatoCopa === 'knockout') {
+    return 'A chave do mata-mata deste torneio ainda não foi publicada.';
+  }
+  if (formatoCopa === 'swiss') {
+    return 'A fase suíça deste torneio ainda não foi publicada.';
+  }
+  return 'Os grupos deste torneio ainda não foram publicados.';
+}
+
+function phaseTitle(formatoCopa?: string) {
+  if (formatoCopa === 'swiss') return 'Fase suíça';
+  return 'Fase de grupos';
+}
+
 export function CupStandingsPage() {
   const [navTitle, setNavTitle] = useState('Subway Tour');
   const [subtitle, setSubtitle] = useState('Carregando...');
-  const [state, setState] = useState<'loading' | 'ended' | 'noGroups' | 'standings' | 'error'>('loading');
+  const [state, setState] = useState<'loading' | 'ended' | 'waiting' | 'standings' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
   const [data, setData] = useState<PublicCupStandings | null>(null);
   const [lastUpdated, setLastUpdated] = useState('');
@@ -20,16 +35,25 @@ export function CupStandingsPage() {
     if (!res.active) {
       setState('ended');
       setSubtitle('');
+      setData(null);
       return;
     }
-    if (!res.hasGroups) {
-      setState('noGroups');
-      setSubtitle(res.titulo || res.tournamentName || '');
+
+    const subtitleText = res.titulo2 || res.titulo || res.tournamentName || '';
+    const hasContent =
+      res.hasPublishedContent ??
+      Boolean(res.hasGroups || res.knockout?.hasKnockout);
+
+    if (!hasContent) {
+      setData(res);
+      setState('waiting');
+      setSubtitle(subtitleText);
       return;
     }
+
     setData(res);
     setState('standings');
-    setSubtitle(res.titulo || res.tournamentName || '');
+    setSubtitle(subtitleText);
     setLastUpdated(`Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`);
   }, []);
 
@@ -74,8 +98,8 @@ export function CupStandingsPage() {
           <div className="alert alert-secondary text-center">O torneio atual já foi encerrado.</div>
         )}
 
-        {state === 'noGroups' && (
-          <div className="alert alert-info text-center">Os grupos deste torneio ainda não foram publicados.</div>
+        {state === 'waiting' && (
+          <div className="alert alert-info text-center">{waitingMessage(data?.formatoCopa)}</div>
         )}
 
         {state === 'error' && (
@@ -86,20 +110,65 @@ export function CupStandingsPage() {
           <>
             <div className="d-flex justify-content-between align-items-center mb-3">
               <p className="small text-muted mb-0">
-                Linhas em <strong>negrito</strong> = zona de classificação.
+                {data.hasGroups
+                  ? <>Linhas em <strong>negrito</strong> = zona de classificação.</>
+                  : data.formatoCopa === 'knockout'
+                    ? 'Formato: só mata-mata (sem fase de grupos).'
+                    : null}
               </p>
               <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => loadStandings()}>
                 Atualizar
               </button>
             </div>
-            <h2 className="h5 mb-3">Fase de grupos</h2>
-            <CupStandingsByGroup
-              standings={data.standings}
-              qtdClassificados={data.qtdClassificados ?? 2}
-            />
+
+            {data.championsMode && (data.participants?.length ?? 0) > 0 && (
+              <section className="mb-5">
+                <h2 className="h5 mb-3">Times (Champions)</h2>
+                <div className="table-responsive">
+                  <table className="table table-sm table-striped align-middle">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Jogador</th>
+                        <th>Print do time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.participants!.map((p) => (
+                        <tr key={p.participant_id}>
+                          <td>{p.name}</td>
+                          <td>
+                            {p.teamImage ? (
+                              <a
+                                href={`${API_URL}/team-images/${p.teamImage}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Ver print do time
+                              </a>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {data.hasGroups && (
+              <section className="mb-5">
+                <h2 className="h5 mb-3">{phaseTitle(data.formatoCopa)}</h2>
+                <CupStandingsByGroup
+                  standings={data.standings}
+                  qtdClassificados={data.qtdClassificados ?? 2}
+                />
+              </section>
+            )}
 
             {data.knockout?.hasKnockout && (
-              <div className="mt-5">
+              <section className="mt-2">
                 <h2 className="h5 mb-2">Chave do mata-mata</h2>
                 <p className="small text-muted mb-3">
                   {data.knockout.cupFinished
@@ -109,7 +178,7 @@ export function CupStandingsPage() {
                 <div className="cup-bracket-wrap">
                   <KnockoutBracket matches={data.knockout.matches} />
                 </div>
-              </div>
+              </section>
             )}
 
             <p className="text-muted small text-center mt-3 mb-0">{lastUpdated}</p>
