@@ -1,7 +1,5 @@
 # Bootstrap — só HTTP (antes do primeiro certificado Let's Encrypt)
-# ${SUBWAY_DOMAIN_FRONTEND}   → ${FRONTEND_UPSTREAM}
-# ${SUBWAY_DOMAIN_API}        → api:3000
-# ${SUBWAY_DOMAIN_EV_COUNTER} → ev-counter:3000
+# Frontend /backend/ → Hub /web/; DOMAIN_API legado → Hub /web/
 
 map $http_upgrade $connection_upgrade {
     default upgrade;
@@ -10,11 +8,6 @@ map $http_upgrade $connection_upgrade {
 
 upstream registro_front {
     server ${FRONTEND_UPSTREAM};
-    keepalive 8;
-}
-
-upstream registro_api {
-    server api:3000;
     keepalive 8;
 }
 
@@ -29,6 +22,20 @@ server {
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
+    }
+
+    client_max_body_size 10m;
+
+    location /backend/ {
+        proxy_http_version 1.1;
+        proxy_set_header Host ${HUB_WEB_HOST};
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_set_header X-API-Key ${HUB_KEY_REGISTRO};
+        proxy_ssl_server_name on;
+        proxy_pass ${HUB_WEB_UPSTREAM}/web/;
     }
 
     location / {
@@ -55,12 +62,14 @@ server {
 
     location / {
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host ${HUB_WEB_HOST};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
-        proxy_pass http://registro_api;
+        proxy_set_header X-API-Key ${HUB_KEY_REGISTRO};
+        proxy_ssl_server_name on;
+        proxy_pass ${HUB_WEB_UPSTREAM}/web/;
     }
 }
 

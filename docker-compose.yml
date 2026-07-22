@@ -1,28 +1,13 @@
-# Subway VPS (vps-aba40034) — registro-tour + ev_counter + gateway nginx + certbot
-# Mesmo padrão do Subway-Hub-API-Rank (HTTP-01 + renovação automática).
-# VPS vps-aba40034: ~/registro-tour + ~/Subway-Ev-Counter (irmãos em ~)
+# Subway VPS (vps-aba40034) — frontend registro + ev_counter + gateway nginx + certbot
+# Backend Express removido: API de torneios vive no Hub (/web) via gateway /backend/
 
 services:
-  api:
-    build: ./backend
-    env_file:
-      - ./backend/.env
-    environment:
-      TEAM_IMAGES_DIR: /data/team-images
-      PORT: "3000"
-    expose:
-      - "3000"
-    volumes:
-      - team-images:/data/team-images
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-
   frontend:
     build:
       context: ./frontend-react
       args:
-        VITE_API_URL: ${VITE_API_URL:?Defina VITE_API_URL no .env (URL pública da API)}
+        # Same-origin: nginx injeta HUB_KEY_REGISTRO ao proxyar /backend → Hub /web
+        VITE_API_URL: ${VITE_API_URL:-/backend}
     expose:
       - "80"
     restart: unless-stopped
@@ -53,11 +38,13 @@ services:
       SSL_CERT_DIR_API: ${SSL_CERT_DIR_API:-api.registro-oldgen.vako.pt}
       SSL_CERT_DIR_EV_COUNTER: ${SSL_CERT_DIR_EV_COUNTER:-ev-counter.vako.pt}
       FRONTEND_UPSTREAM: ${FRONTEND_UPSTREAM:-frontend:80}
+      HUB_WEB_UPSTREAM: ${HUB_WEB_UPSTREAM:?Defina HUB_WEB_UPSTREAM (ex. https://apiv2.subway.vako.pt)}
+      HUB_WEB_HOST: ${HUB_WEB_HOST:?Defina HUB_WEB_HOST (ex. apiv2.subway.vako.pt)}
+      HUB_KEY_REGISTRO: ${HUB_KEY_REGISTRO:?Defina HUB_KEY_REGISTRO (mesma key do Hub)}
     volumes:
       - certbot-www:/var/www/certbot:ro
       - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
     depends_on:
-      - api
       - frontend
       - ev-counter
     restart: unless-stopped
@@ -71,5 +58,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  team-images:
   certbot-www:
