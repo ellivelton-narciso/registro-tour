@@ -10,6 +10,7 @@ import {
   DEFAULT_WHATSAPP_COUNTRY,
   WHATSAPP_COUNTRY_OPTIONS,
   buildWhatsappContact,
+  parseWhatsappCountryCode,
   sanitizeLocalWhatsappNumber,
   validateWhatsappContact,
 } from '../../utils/whatsappContact';
@@ -369,7 +370,7 @@ export function RegistrationPage() {
               className="form-select whatsapp-contact-row__ddi"
               id="whatsapp-ddi"
               value={countryDdi}
-              onChange={(e) => setCountryDdi(e.target.value)}
+              onChange={(e) => setCountryDdi(parseWhatsappCountryCode(e.target.value))}
               aria-label="País / DDI"
               required
             >

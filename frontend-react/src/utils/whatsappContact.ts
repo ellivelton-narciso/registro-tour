@@ -20,6 +20,13 @@ export type WhatsappCountryCode = (typeof WHATSAPP_COUNTRY_OPTIONS)[number]['val
 
 export const DEFAULT_WHATSAPP_COUNTRY: WhatsappCountryCode = '55';
 
+const COUNTRY_CODES = new Set<string>(WHATSAPP_COUNTRY_OPTIONS.map((o) => o.value));
+
+export function parseWhatsappCountryCode(value: string): WhatsappCountryCode {
+  if (COUNTRY_CODES.has(value)) return value as WhatsappCountryCode;
+  return DEFAULT_WHATSAPP_COUNTRY;
+}
+
 /** Mantém apenas dígitos no número local (sem DDI). */
 export function sanitizeLocalWhatsappNumber(raw: string): string {
   return String(raw ?? '').replace(/\D/g, '');
