@@ -1794,14 +1794,10 @@ app.post('/advanceKnockout', auth, async (req, res) => {
     );
 
     const winners = winnersRes.rows.map((r) => r.winner_id);
-    if (winners.length < 2 || winners.length % 2 !== 0) {
+    const { pairings, byes } = cupKnockout.buildAdvanceKnockoutRound(winners);
+    if (winners.length < 2 || (pairings.length === 0 && byes.length === 0)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Número inválido de vencedores na rodada anterior.' });
-    }
-
-    const pairings = [];
-    for (let i = 0; i < winners.length; i += 2) {
-      pairings.push([winners[i], winners[i + 1]]);
     }
 
     const created = await cupKnockout.insertKnockoutRound(
@@ -1809,6 +1805,12 @@ app.post('/advanceKnockout', auth, async (req, res) => {
       tournamentId,
       pairings,
       formatoMataMata,
+      nextPhase
+    );
+    const byeMatchIds = await cupKnockout.insertKnockoutByes(
+      client,
+      tournamentId,
+      byes,
       nextPhase
     );
 
@@ -1835,8 +1837,9 @@ app.post('/advanceKnockout', auth, async (req, res) => {
       message: `Rodada ${nextPhase} gerada com sucesso!${extra}`,
       phase: nextPhase,
       qtdConfrontos: created.length,
+      qtdByes: byeMatchIds.length,
       qtdThirdPlace: thirdPlaceMatchIds.length,
-      matchIds: [...created, ...thirdPlaceMatchIds]
+      matchIds: [...created, ...byeMatchIds, ...thirdPlaceMatchIds]
     });
   } catch (err) {
     await client.query('ROLLBACK');

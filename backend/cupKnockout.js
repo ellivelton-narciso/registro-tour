@@ -60,12 +60,40 @@ function nextKnockoutPhase(phase) {
   return KNOCKOUT_ROUND_CHAIN[idx + 1];
 }
 
+function isByeMatch(match) {
+  return (
+    match.player_a_id != null &&
+    match.player_b_id != null &&
+    match.player_a_id === match.player_b_id
+  );
+}
+
 function buildThirdPlacePairing(semifinalMatches) {
-  const losers = semifinalMatches.map((match) =>
+  const realMatches = semifinalMatches.filter((match) => !isByeMatch(match));
+  const losers = realMatches.map((match) =>
     match.winner_id === match.player_a_id ? match.player_b_id : match.player_a_id
   );
   if (losers.length !== 2) return [];
   return [[losers[0], losers[1]]];
+}
+
+function buildAdvanceKnockoutRound(winnerIds) {
+  const winners = [...winnerIds];
+  if (winners.length < 2) {
+    return { pairings: [], byes: [], playerCount: winners.length };
+  }
+
+  const pairings = [];
+  const byes = [];
+  for (let i = 0; i < winners.length; i += 2) {
+    if (i + 1 < winners.length) {
+      pairings.push([winners[i], winners[i + 1]]);
+    } else {
+      byes.push(winners[i]);
+    }
+  }
+
+  return { pairings, byes, playerCount: winners.length };
 }
 
 function phaseSortKey(phase) {
@@ -176,26 +204,7 @@ function buildKnockoutPairings(qualifiedByGroup, groupLabels, qtdClassificados) 
 }
 
 function buildDirectKnockoutRound(playerIds) {
-  const shuffled = shuffle(playerIds);
-  const playerCount = shuffled.length;
-  if (playerCount < 2) {
-    return { pairings: [], byes: [], totalSlots: 0, playerCount };
-  }
-
-  const totalSlots = nextPowerOfTwo(playerCount);
-  const bracket = [...shuffled];
-  while (bracket.length < totalSlots) bracket.push(null);
-
-  const pairings = [];
-  const byes = [];
-  for (let i = 0; i < bracket.length; i += 2) {
-    const a = bracket[i];
-    const b = bracket[i + 1];
-    if (a && b) pairings.push([a, b]);
-    else if (a || b) byes.push(a || b);
-  }
-
-  return { pairings, byes, totalSlots, playerCount };
+  return buildSeededKnockoutRound(shuffle(playerIds));
 }
 
 async function fetchAllParticipantPlayerIds(client, tournamentId) {
@@ -383,6 +392,8 @@ module.exports = {
   insertKnockoutRound,
   insertKnockoutByes,
   buildThirdPlacePairing,
+  buildAdvanceKnockoutRound,
+  isByeMatch,
   isKnockoutPhase,
   buildSeededKnockoutRound
 };
