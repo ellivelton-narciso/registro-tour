@@ -37,8 +37,10 @@ function formatScore(match: TournamentMatch, side: 'a' | 'b') {
   return '—';
 }
 
-/** Altura mínima por linha da 1ª fase (card + badge + folga). */
+/** Altura mínima por linha da 1ª fase (card + badge). */
 const ROW_MIN_REM = 5.25;
+/** Espaço vertical entre confrontos da 1ª fase (e entre linhas do grid). */
+const ROW_GAP_REM = 0.85;
 
 function matchGridRow(matchIdx: number, matchCount: number, firstCount: number) {
   const start = Math.floor((matchIdx * firstCount) / matchCount) + 1;
@@ -92,7 +94,7 @@ export function KnockoutBracket({ matches }: Props) {
   if (!phases.length) return null;
 
   const firstCount = byPhase[phases[0]].length;
-  const slotsMinHeight = `${firstCount * ROW_MIN_REM}rem`;
+  const slotsMinHeight = `${firstCount * ROW_MIN_REM + Math.max(0, firstCount - 1) * ROW_GAP_REM}rem`;
 
   return (
     <div className="cup-bracket">
@@ -108,6 +110,7 @@ export function KnockoutBracket({ matches }: Props) {
                 className="cup-bracket-slots"
                 style={{
                   gridTemplateRows: `repeat(${firstCount}, minmax(${ROW_MIN_REM}rem, 1fr))`,
+                  rowGap: `${ROW_GAP_REM}rem`,
                   minHeight: slotsMinHeight,
                 }}
               >
