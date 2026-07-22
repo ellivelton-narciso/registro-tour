@@ -78,11 +78,13 @@
     return card;
   }
 
-  function slotMarginTop(roundIdx, matchIdx, unitRem) {
-    if (matchIdx === 0) {
-      return (Math.pow(2, roundIdx) - 1) * unitRem * 0.5;
-    }
-    return Math.pow(2, roundIdx) * unitRem;
+  /** Altura mínima por linha da 1ª fase (card + badge + folga). */
+  const ROW_MIN_REM = 5.25;
+
+  function matchGridRow(matchIdx, matchCount, firstCount) {
+    const start = Math.floor((matchIdx * firstCount) / matchCount) + 1;
+    const end = Math.floor(((matchIdx + 1) * firstCount) / matchCount) + 1;
+    return `${start} / ${end}`;
   }
 
   function renderBracket(container, matches, options) {
@@ -97,9 +99,8 @@
     }
 
     container.classList.remove('d-none');
-    const unitRem = 3.25;
     const firstCount = byPhase[phases[0]].length;
-    const slotsHeight = firstCount * unitRem * Math.pow(2, 1);
+    const slotsMinHeight = `${firstCount * ROW_MIN_REM}rem`;
 
     const bracket = document.createElement('div');
     bracket.className = 'cup-bracket';
@@ -107,6 +108,7 @@
     for (let roundIdx = 0; roundIdx < phases.length; roundIdx += 1) {
       const phase = phases[roundIdx];
       const roundMatches = byPhase[phase];
+      const matchCount = roundMatches.length;
 
       const col = document.createElement('div');
       col.className = 'cup-bracket-round';
@@ -118,12 +120,13 @@
 
       const slots = document.createElement('div');
       slots.className = 'cup-bracket-slots';
-      slots.style.minHeight = `${slotsHeight}px`;
+      slots.style.gridTemplateRows = `repeat(${firstCount}, minmax(${ROW_MIN_REM}rem, 1fr))`;
+      slots.style.minHeight = slotsMinHeight;
 
       roundMatches.forEach((match, matchIdx) => {
         const slot = document.createElement('div');
         slot.className = 'cup-bracket-slot';
-        slot.style.marginTop = `${slotMarginTop(roundIdx, matchIdx, unitRem)}rem`;
+        slot.style.gridRow = matchGridRow(matchIdx, matchCount, firstCount);
         slot.appendChild(createMatchCard(match));
         slots.appendChild(slot);
       });

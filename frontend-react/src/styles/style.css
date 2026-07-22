@@ -231,14 +231,15 @@ h5 {
 }
 
 .cup-bracket-slots {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
+  display: grid;
+  align-content: stretch;
+  flex: 1;
 }
 
 .cup-bracket-slot {
   display: flex;
   align-items: center;
+  min-height: 0;
 }
 
 .cup-bracket-match {

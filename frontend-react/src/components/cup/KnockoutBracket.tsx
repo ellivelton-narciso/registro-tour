@@ -37,9 +37,13 @@ function formatScore(match: TournamentMatch, side: 'a' | 'b') {
   return '—';
 }
 
-function slotMarginTop(roundIdx: number, matchIdx: number, unitRem: number) {
-  if (matchIdx === 0) return (Math.pow(2, roundIdx) - 1) * unitRem * 0.5;
-  return Math.pow(2, roundIdx) * unitRem;
+/** Altura mínima por linha da 1ª fase (card + badge + folga). */
+const ROW_MIN_REM = 5.25;
+
+function matchGridRow(matchIdx: number, matchCount: number, firstCount: number) {
+  const start = Math.floor((matchIdx * firstCount) / matchCount) + 1;
+  const end = Math.floor(((matchIdx + 1) * firstCount) / matchCount) + 1;
+  return `${start} / ${end}`;
 }
 
 function MatchCard({ match }: { match: TournamentMatch }) {
@@ -87,35 +91,45 @@ export function KnockoutBracket({ matches }: Props) {
 
   if (!phases.length) return null;
 
-  const unitRem = 3.25;
   const firstCount = byPhase[phases[0]].length;
-  const slotsHeight = firstCount * unitRem * Math.pow(2, 1);
+  const slotsMinHeight = `${firstCount * ROW_MIN_REM}rem`;
 
   return (
     <div className="cup-bracket">
-      {phases.map((phase, roundIdx) => (
-        <div key={phase} className="d-flex align-items-stretch">
-          <div className="cup-bracket-round">
-            <div className="cup-bracket-round-title">{PHASE_LABELS[phase] || phase}</div>
-            <div className="cup-bracket-slots" style={{ minHeight: `${slotsHeight}px` }}>
-              {byPhase[phase].map((match, matchIdx) => (
-                <div
-                  key={match.id}
-                  className="cup-bracket-slot"
-                  style={{ marginTop: `${slotMarginTop(roundIdx, matchIdx, unitRem)}rem` }}
-                >
-                  <MatchCard match={match} />
-                </div>
-              ))}
+      {phases.map((phase, roundIdx) => {
+        const roundMatches = byPhase[phase];
+        const matchCount = roundMatches.length;
+
+        return (
+          <div key={phase} className="d-flex align-items-stretch">
+            <div className="cup-bracket-round">
+              <div className="cup-bracket-round-title">{PHASE_LABELS[phase] || phase}</div>
+              <div
+                className="cup-bracket-slots"
+                style={{
+                  gridTemplateRows: `repeat(${firstCount}, minmax(${ROW_MIN_REM}rem, 1fr))`,
+                  minHeight: slotsMinHeight,
+                }}
+              >
+                {roundMatches.map((match, matchIdx) => (
+                  <div
+                    key={match.id}
+                    className="cup-bracket-slot"
+                    style={{ gridRow: matchGridRow(matchIdx, matchCount, firstCount) }}
+                  >
+                    <MatchCard match={match} />
+                  </div>
+                ))}
+              </div>
             </div>
+            {roundIdx < phases.length - 1 && (
+              <div className="cup-bracket-arrow" aria-hidden="true">
+                ›
+              </div>
+            )}
           </div>
-          {roundIdx < phases.length - 1 && (
-            <div className="cup-bracket-arrow" aria-hidden="true">
-              ›
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
