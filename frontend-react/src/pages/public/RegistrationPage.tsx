@@ -6,6 +6,13 @@ import { subwaySelectProps } from '../../utils/selectProps';
 import Swal from 'sweetalert2';
 import { API_URL, apiFetch } from '../../api/client';
 import type { PokemonEntry, TournamentConfig } from '../../api/types';
+import {
+  DEFAULT_WHATSAPP_COUNTRY,
+  WHATSAPP_COUNTRY_OPTIONS,
+  buildWhatsappContact,
+  sanitizeLocalWhatsappNumber,
+  validateWhatsappContact,
+} from '../../utils/whatsappContact';
 
 const MONOTYPE_OPTIONS = [
   'normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 'poison',
@@ -32,7 +39,8 @@ export function RegistrationPage() {
   const [config, setConfig] = useState<TournamentConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [countryDdi, setCountryDdi] = useState(DEFAULT_WHATSAPP_COUNTRY);
+  const [localPhone, setLocalPhone] = useState('');
   const [codigo, setCodigo] = useState('');
   const [codigoLocked, setCodigoLocked] = useState(false);
   const [monotype, setMonotype] = useState<string | null>('normal');
@@ -217,7 +225,8 @@ export function RegistrationPage() {
     });
     Swal.fire({ icon: 'success', title: 'Formulário Enviado', text: data.message });
     setName('');
-    setEmail('');
+    setCountryDdi(DEFAULT_WHATSAPP_COUNTRY);
+    setLocalPhone('');
     setSelectedPokemon([]);
     setTeamFile(null);
     setTeamPreview(null);
@@ -233,10 +242,19 @@ export function RegistrationPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!config?.id) return;
-    if (!name.trim() || !email.trim()) {
+
+    if (!name.trim()) {
       Swal.fire({ icon: 'error', title: 'Campos Obrigatórios', text: 'Preencha nick e contato.' });
       return;
     }
+
+    const contactError = validateWhatsappContact(countryDdi, localPhone);
+    if (contactError) {
+      Swal.fire({ icon: 'error', title: 'Contato inválido', text: contactError });
+      return;
+    }
+
+    const email = buildWhatsappContact(countryDdi, localPhone)!;
 
     if (championsMode) {
       if (!teamFile) {
@@ -258,7 +276,7 @@ export function RegistrationPage() {
         await submitRegistration({
           tournamentId: config.id,
           name: name.trim(),
-          email: email.trim(),
+          email,
           teamImage: upload.filename,
         });
       } catch (err) {
@@ -311,7 +329,7 @@ export function RegistrationPage() {
         await submitRegistration({
           tournamentId: config.id,
           name: name.trim(),
-          email: email.trim(),
+          email,
           pokemonList: pokemonPayload,
         });
       } catch (err) {
@@ -345,16 +363,38 @@ export function RegistrationPage() {
           />
         </div>
         <div className="mb-3">
-          <label htmlFor="email" className="form-label">Contato (Nº Whatsapp)</label>
-          <input
-            type="text"
-            className="form-control"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Digite seu contato"
-            required
-          />
+          <label htmlFor="whatsapp-local" className="form-label">Contato (Nº WhatsApp)</label>
+          <div className="whatsapp-contact-row">
+            <select
+              className="form-select whatsapp-contact-row__ddi"
+              id="whatsapp-ddi"
+              value={countryDdi}
+              onChange={(e) => setCountryDdi(e.target.value)}
+              aria-label="País / DDI"
+              required
+            >
+              {WHATSAPP_COUNTRY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel-national"
+              className="form-control whatsapp-contact-row__number"
+              id="whatsapp-local"
+              value={localPhone}
+              onChange={(e) => setLocalPhone(sanitizeLocalWhatsappNumber(e.target.value))}
+              placeholder={countryDdi === '55' ? 'DDD + número (ex: 67981192319)' : 'Só números, sem DDI'}
+              required
+            />
+          </div>
+          <small className="text-muted">
+            Selecione o país e digite só o número (sem + ou espaços). Será salvo como{' '}
+            <code>+{countryDdi}…</code>
+          </small>
         </div>
 
         {!championsMode && config?.monotype && (

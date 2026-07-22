@@ -79,6 +79,33 @@ h5 {
   color: #6c7a89;
 }
 
+.whatsapp-contact-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.whatsapp-contact-row__ddi {
+  flex: 0 0 11.5rem;
+  max-width: 42%;
+}
+
+.whatsapp-contact-row__number {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .whatsapp-contact-row {
+    flex-direction: column;
+  }
+
+  .whatsapp-contact-row__ddi {
+    max-width: none;
+    flex-basis: auto;
+  }
+}
+
 .card {
   background-color: var(--surface-bg);
   border-color: #cfd8e3;
